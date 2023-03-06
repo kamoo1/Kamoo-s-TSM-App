@@ -54,8 +54,8 @@ class TextFile(BaseFile):
     def __init__(self, file_path: str) -> None:
         super().__init__(file_path)
 
-    def open(self, mode="r"):
-        return open(self.file_path, mode)
+    def open(self, mode="r", **kwargs):
+        return open(self.file_path, mode, **kwargs)
 
 
 class BinaryFile(BaseFile):

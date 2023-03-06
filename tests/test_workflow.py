@@ -272,8 +272,7 @@ class TestWorkflow(TestCase):
             with open(export_file.file_path, "rb") as f:
                 content = f.read()
                 h = hashlib.sha256(content).hexdigest()
-                print(content)
                 self.assertEqual(
                     h,
-                    "80020676a1209e2eea65b909420471ab66ae07098fbf6463ef2fb9601a530031",
+                    "c208ddbf05331c7f6a9d36d386f80bce03ef4fd0be6e13b894efba9a40231198",
                 )

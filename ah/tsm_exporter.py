@@ -78,5 +78,5 @@ class TSMExporter:
             fields=fields_str,
             data=",".join(items_data),
         )
-        with file.open("a") as f:
+        with file.open("a", newline="\n") as f:
             f.write(text_out + "\n")
