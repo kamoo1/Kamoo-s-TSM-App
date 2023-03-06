@@ -1,0 +1,50 @@
+syntax="proto3";
+/* Representation in JSON format 
+
+// ItemDB
+{
+    "items": [
+        // Item
+        {
+            "id": "100",
+            "market_value_records": [
+                // MarketValueRecord
+                {
+                    "timestamp": 1234567890,
+                    "market_value": 10000,
+                    "min_buyout": 10000,
+                    "num_auctions": 100,
+                },
+                ...
+            ]
+        },
+        ...
+    ]
+}
+*/
+
+
+message ItemDB {
+    repeated Item items = 1;
+}
+message Item {
+    ItemString item_string = 1;
+    repeated MarketValueRecord market_value_records = 2;
+}
+enum ItemStringType {
+    ITEM = 0;
+    PET = 1;
+}
+message ItemString {
+    ItemStringType type = 1;
+    int32 id = 2;
+    repeated int32 bonus = 3;
+    repeated int32 mods = 4;
+}
+message MarketValueRecord {
+    int32 timestamp = 1;
+    int32 num_auctions = 2;
+    int64 market_value = 3;
+    int64 min_buyout = 4;
+}
+
