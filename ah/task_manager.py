@@ -108,6 +108,21 @@ class TaskManager:
             yield int(crid)
 
     def _pull_connected_realm(self, region: str, crid: int):
+        """
+        >>> ret = {
+            # crid
+            "id": 123,
+            "timezone": "Asia/Taipei",
+            "realms": [
+                {
+                    "id": 123,
+                    "name": "Realm Name",
+                    "slug": "realm-slug"
+                },
+                ...
+            ]
+        }
+        """
         connected_realm = self.api.get_connected_realm(region, crid)
         ret = {"id": crid, "realms": []}
         for realm in connected_realm["realms"]:
@@ -128,27 +143,17 @@ class TaskManager:
     def _pull_connected_realms(self, region: str):
         """
 
-        >>> [
+        >>> {
                 # connected realms
-                {
-                    "id": 123,
-                    "timezone": "Asia/Taipei",
-                    "realms": [
-                        {
-                            "id": 123,
-                            "slug": "realm-slug"
-                        },
-                        ...
-                    ]
-                },
+                $crid: $crid_data,
                 ...
-            ]
+            }
         """
-        crids = self._pull_connected_realms_ids(self.api, region)
-        ret = []
+        crids = self._pull_connected_realms_ids(region)
+        ret = {}
         for crid in crids:
-            connected_realm = self._pull_connected_realm(self.api, region, crid)
-            ret.append(connected_realm)
+            connected_realm = self._pull_connected_realm(region, crid)
+            ret[crid] = connected_realm
 
         return ret
 
@@ -237,7 +242,10 @@ class TaskManager:
         # realms = self._pull_connected_realms(region)
         # print(realms)
         if exporter:
+            crid_map = self._pull_connected_realms(region)
             export_file.remove()
+        else:
+            crid_map = None
 
         for crid in crids:
             increment = self.pull_increment(region, crid)
@@ -246,6 +254,18 @@ class TaskManager:
                 auctions_data = self.update_db(file, increment, ts_update_begin)
                 ts_update_end = int(time.time())
                 region_data.extend(auctions_data)
+                realms = []
+                realms.append(str(crid))
+                for realm in crid_map[crid]["realms"]:
+                    realm_name = realm["name"]
+                    if "," in realm_name or '"' in realm_name:
+                        self._logger.error(
+                            f"Realm name {realm_name} contains invalid characters, "
+                            "ignored."
+                        )
+                        continue
+                    realms.append(realm["name"])
+                realm_str = ",".join(realms)
                 if exporter:
                     for export_realm in self.REALM_EXPORTS:
                         exporter.append_to_file(
@@ -253,8 +273,7 @@ class TaskManager:
                             auctions_data,
                             export_realm["fields"],
                             export_realm["type"],
-                            # TODO: map crid to (one of the) realm name? maybe?
-                            crid,
+                            realm_str,
                             ts_update_begin,
                             ts_update_end,
                         )
@@ -272,7 +291,7 @@ class TaskManager:
                     commodities_data,
                     self.COMMODITIES_EXPORT["fields"],
                     self.COMMODITIES_EXPORT["type"],
-                    region,
+                    region.upper(),
                     ts_update_begin,
                     ts_update_end,
                 )
@@ -284,7 +303,7 @@ class TaskManager:
                     region_data,
                     export_region["fields"],
                     export_region["type"],
-                    region,
+                    region.upper(),
                     ts_update_begin,
                     ts_update_end,
                 )

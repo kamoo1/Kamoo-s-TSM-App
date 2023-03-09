@@ -274,7 +274,7 @@ class TestWorkflow(TestCase):
                 h = hashlib.sha256(content).hexdigest()
                 self.assertEqual(
                     h,
-                    "c208ddbf05331c7f6a9d36d386f80bce03ef4fd0be6e13b894efba9a40231198",
+                    "eb75e2d7bbe182d1522388ac63b802578dee86c8580d43ccfefa7873abb2fb33",
                 )
 
     def test_parse_args(self):
