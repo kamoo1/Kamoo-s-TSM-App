@@ -3,11 +3,9 @@
 TSM Backend is a serverless auction data exporter for the Trade Skill Master (TSM) addon in World of Warcraft.
 
 ## Work in Progress Notice
----
 Please note that this project is still a work in progress. The realm names in the exported file need to be converted to the correct format before it can be used by TSM. Currently, it contains a concatenated string of all connected realms, which is not supported by TSM. Additionally, more data needs to be gathered to test the accuracy of the exported data.
 
 ## Usage
----
 To run the exporter locally, follow these steps:
 1. Set the BN_CLIENT_ID and BN_CLIENT_SECRET environment variables.
 
