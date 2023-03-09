@@ -48,7 +48,7 @@ jobs:
         # save cache, caches are evicted after 7 days 
         # or by ascending access time if over 10GB
         # https://github.com/actions/cache/issues/2#issuecomment-548426628
-        key: ${{ runner.os }}-ah-${{ env.REGION }}-${{ env.JOB_START_TS }}
+        key: ${{ runner.os }}-ah-${{ env.JOB_START_TS }}
         # load most recently created cache
         restore-keys: |
           ${{ runner.os }}-ah-
