@@ -1,0 +1,66 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: AH Update and Export
+
+on:
+  schedule:
+    # 8 times a day
+    - cron: '0 */3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  ah_update_export:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      # uses the default branch (main)
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+        cache: "pip"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install coverage
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    - name: Test with unittest
+      run: |
+        python -m unittest discover -vfs tests
+    - name: Set up environment variables
+        run: |
+        echo "JOB_START_TS=$(date +%s)" >> $GITHUB_ENV
+        echo "DB_PATH=/tmp/ah_db" >> $GITHUB_ENV
+        echo "EXPORT_PATH=/tmp/AppData.lua" >> $GITHUB_ENV
+        echo "FLAG_COMPRESS=--compress_db" >> $GITHUB_ENV
+        echo "REGION=tw" >> $GITHUB_ENV
+    - name: Get AH Database File from GitHub Cache
+      uses: actions/cache@v3
+      with:
+        path: ${{ env.DB_PATH }}
+        # save cache, caches are evicted after 7 days 
+        # or by ascending access time if over 10GB
+        # https://github.com/actions/cache/issues/2#issuecomment-548426628
+        key: ${{ runner.os }}-ah-${{ env.JOB_START_TS }}
+        # load most recently created cache
+        restore-keys: |
+          ${{ runner.os }}-ah-
+    - name: Run AH Update and Export
+      run: |
+        BN_CLIENT_ID=${{ secrets.BN_CLIENT_ID }} \
+          BN_CLIENT_SECRET=${{ secrets.BN_CLIENT_SECRET }} \
+          python -m ah \ 
+          --db_path ${{ env.DB_PATH }} \
+          --export_path ${{ env.EXPORT_PATH }} \
+          ${{ env.FLAG_COMPRESS }} \
+          ${{ env.REGION }}
+    - name: Release Export
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ env.EXPORT_PATH }}
+        name: Export ${{ env.JOB_START_TS }}
