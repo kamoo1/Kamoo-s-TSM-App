@@ -52,7 +52,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-ah-
     - name: Run AH Update and Export
-    - env: 
+      env: 
         BN_CLIENT_ID: ${{ secrets.BN_CLIENT_ID }}
         BN_CLIENT_SECRET: ${{ secrets.BN_CLIENT_SECRET }}
       run: >
