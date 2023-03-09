@@ -16,7 +16,7 @@ jobs:
   ah_update_export:
 
     runs-on: ubuntu-latest
-
+    environment: env_main
     steps:
       # uses the default branch (main)
     - uses: actions/checkout@v3
