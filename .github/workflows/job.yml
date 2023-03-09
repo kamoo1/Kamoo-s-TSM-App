@@ -34,11 +34,11 @@ jobs:
         python -m unittest discover -vfs tests
     - name: Set up environment variables
         run: |
-        echo "JOB_START_TS=$(date +%s)" >> $GITHUB_ENV
-        echo "DB_PATH=/tmp/ah_db" >> $GITHUB_ENV
-        echo "EXPORT_PATH=/tmp/AppData.lua" >> $GITHUB_ENV
-        echo "FLAG_COMPRESS=--compress_db" >> $GITHUB_ENV
-        echo "REGION=tw" >> $GITHUB_ENV
+          echo "JOB_START_TS=$(date +%s)" >> $GITHUB_ENV
+          echo "DB_PATH=/tmp/ah_db" >> $GITHUB_ENV
+          echo "EXPORT_PATH=/tmp/AppData.lua" >> $GITHUB_ENV
+          echo "FLAG_COMPRESS=--compress_db" >> $GITHUB_ENV
+          echo "REGION=tw" >> $GITHUB_ENV
     - name: Get AH Database File from GitHub Cache
       uses: actions/cache@v3
       with:
