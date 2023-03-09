@@ -9,13 +9,13 @@ on:
     # 8 times a day
     - cron: '0 */3 * * *'
 
-permissions:
-  contents: read
 
 jobs:
   ah_update_export:
     runs-on: ubuntu-latest
     environment: env_main
+    permissions:
+      contents: write
     steps:
     # checkout 'latest' tag
     - uses: actions/checkout@v3
@@ -65,5 +65,6 @@ jobs:
     - name: Release Export
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: latest
         files: ${{ env.EXPORT_PATH }}
         name: Export ${{ env.JOB_START_TS }}
