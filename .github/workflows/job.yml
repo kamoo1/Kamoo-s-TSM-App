@@ -52,9 +52,10 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-ah-
     - name: Run AH Update and Export
+    - env: 
+        BN_CLIENT_ID: ${{ secrets.BN_CLIENT_ID }}
+        BN_CLIENT_SECRET: ${{ secrets.BN_CLIENT_SECRET }}
       run: >
-        BN_CLIENT_ID=${{ secrets.BN_CLIENT_ID }}
-        BN_CLIENT_SECRET=${{ secrets.BN_CLIENT_SECRET }}
         python -m ah
         --db_path ${{ env.DB_PATH }}
         --export_path ${{ env.EXPORT_PATH }}
