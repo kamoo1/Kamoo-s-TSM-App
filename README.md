@@ -1,4 +1,6 @@
 # TSM Backend
+[![Tests and Coverage](https://github.com/kamoo1/TSM-Backend/actions/workflows/python-tests-coverage.yml/badge.svg)](https://github.com/kamoo1/TSM-Backend/actions/workflows/python-tests-coverage.yml)
+[![codecov](https://codecov.io/gh/kamoo1/TSM-Backend/branch/main/graph/badge.svg?token=20JNWT1J7X)](https://codecov.io/gh/kamoo1/TSM-Backend)
 
 TSM Backend is a serverless auction data exporter for the Trade Skill Master (TSM) addon in World of Warcraft.
 
