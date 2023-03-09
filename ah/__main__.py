@@ -53,7 +53,7 @@ def parse_args(raw_args):
     parser.add_argument(
         "--compress_db",
         help="Use compression for DB files",
-        default=config.DEFAULT_COMPRESS_DB,
+        default=False,
         action="store_true",
     )
     parser.add_argument("region", help="Region to export", choices=config.REGIONS)

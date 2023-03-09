@@ -8,7 +8,6 @@ BN_CLIENT_SECRET = os.environ.get("BN_CLIENT_SECRET")
 TEMP_PATH = get_temp_path()
 DEFAULT_DB_PATH = os.path.join(TEMP_PATH, "ah_db")
 DEFAULT_EXPORT_PATH = os.path.join(TEMP_PATH, "ah_export.lua")
-DEFAULT_COMPRESS_DB = True
 APP_NAME = "ah"
 MARKET_VALUE_RECORD_EXPIRES = 60 * SECONDS_IN.DAY
 REGIONS = ["us", "eu", "kr", "tw"]
