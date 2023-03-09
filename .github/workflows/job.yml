@@ -14,12 +14,13 @@ permissions:
 
 jobs:
   ah_update_export:
-
     runs-on: ubuntu-latest
     environment: env_main
     steps:
-      # uses the default branch (main)
+    # checkout 'latest' tag
     - uses: actions/checkout@v3
+      with:
+        ref: latest
     - name: Set up Python 3.10
       uses: actions/setup-python@v3
       with:
