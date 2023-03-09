@@ -212,10 +212,10 @@ class TestModels(TestCase):
         records.empty()
         for mvr in records_pre:
             records.add(mvr, sort=False)
-        self.assertEqual(records.get_historical_market_value(NOW), None)
+        self.assertEqual(records.get_historical_market_value(NOW), 0)
 
         records.empty()
-        self.assertEqual(records.get_historical_market_value(NOW), None)
+        self.assertEqual(records.get_historical_market_value(NOW), 0)
 
     def test_weighted(self):
         weight_lcm = 1

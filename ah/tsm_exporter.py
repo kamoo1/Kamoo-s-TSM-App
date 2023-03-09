@@ -76,7 +76,7 @@ class TSMExporter:
                 item_data.append(value)
 
             if is_skip_item:
-                cls._logger.warning(f"Skip item {item_string} due to no data.")
+                cls._logger.debug(f"Skip item {item_string} due to no data.")
                 continue
 
             item_text = "{" + ",".join(item_data) + "}"
