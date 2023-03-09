@@ -4,6 +4,7 @@
 name: AH Update and Export
 
 on:
+  workflow_dispatch:
   schedule:
     # 8 times a day
     - cron: '0 */3 * * *'
@@ -46,19 +47,19 @@ jobs:
         # save cache, caches are evicted after 7 days 
         # or by ascending access time if over 10GB
         # https://github.com/actions/cache/issues/2#issuecomment-548426628
-        key: ${{ runner.os }}-ah-${{ env.JOB_START_TS }}
+        key: ${{ runner.os }}-ah-${{ env.REGION }}-${{ env.JOB_START_TS }}
         # load most recently created cache
         restore-keys: |
           ${{ runner.os }}-ah-
     - name: Run AH Update and Export
-      run: |
-        BN_CLIENT_ID=${{ secrets.BN_CLIENT_ID }} \
-          BN_CLIENT_SECRET=${{ secrets.BN_CLIENT_SECRET }} \
-          python -m ah \ 
-          --db_path ${{ env.DB_PATH }} \
-          --export_path ${{ env.EXPORT_PATH }} \
-          ${{ env.FLAG_COMPRESS }} \
-          ${{ env.REGION }}
+      run: >
+        BN_CLIENT_ID=${{ secrets.BN_CLIENT_ID }}
+        BN_CLIENT_SECRET=${{ secrets.BN_CLIENT_SECRET }}
+        python -m ah
+        --db_path ${{ env.DB_PATH }}
+        --export_path ${{ env.EXPORT_PATH }}
+        ${{ env.FLAG_COMPRESS }}
+        ${{ env.REGION }}
     - name: Release Export
       uses: softprops/action-gh-release@v1
       with:
