@@ -10,7 +10,6 @@ from ah.models import (
     Auction,
     Commodity,
 )
-from ah.math import TSM_Math
 
 
 class TestModels(TestCase):
@@ -30,7 +29,7 @@ class TestModels(TestCase):
         # !!!
         assert quantity > 20
 
-        n_sample = int(TSM_Math.SAMPLE_HI * quantity)
+        n_sample = int(MapItemStringMarketValueRecord.SAMPLE_HI * quantity)
         n_not_sample = quantity - n_sample
 
         if n_sample % 2 == 1:
@@ -39,7 +38,9 @@ class TestModels(TestCase):
             should_append_avg_price = False
 
         n_sample_half = n_sample // 2
-        price_delta = avg_price * ((TSM_Math.MAX_JUMP_MUL - 1) // 2)
+        price_delta = avg_price * (
+            (MapItemStringMarketValueRecord.MAX_JUMP_MUL - 1) // 2
+        )
 
         # we generate n_half item with price avg_price + price_delta
         # and n_half item with price avg_price - price_delta

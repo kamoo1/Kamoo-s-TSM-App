@@ -2,9 +2,10 @@ from functools import partial
 from enum import Enum
 from heapq import heappush, heappop
 from collections import defaultdict
-from functools import total_ordering, wraps
-from typing import List, Dict, ClassVar, Generator, Tuple, Optional, Union, Callable
+from functools import total_ordering
+from typing import List, Dict, ClassVar, Generator, Tuple, Optional, Union, Iterable
 
+import numpy as np
 from pydantic import Field, validator
 
 from ah.protobuf.item_db_pb2 import (
@@ -21,7 +22,6 @@ from ah.models.blizzard import (
     CommodityItem,
 )
 from ah.defs import SECONDS_IN
-from ah.math import TSM_Math
 
 __all__ = (
     "MarketValueRecord",
@@ -98,7 +98,7 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
     """
 
     __root__: List[MarketValueRecord] = Field(default_factory=list)
-    DAY_WEIGHTS: ClassVar[int] = [
+    DAY_WEIGHTS: ClassVar[List[int]] = [
         4,
         5,
         7,
@@ -217,9 +217,9 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
 
         if not self:
             self._logger.warning(
-                f"{self}: no records, get_historical_market_value() returns None"
+                f"{self}: no records, get_historical_market_value() returns 0"
             )
-            return None
+            return 0
 
         days_average = self.average_by_day(
             self, ts_now, self.HISTORICAL_DAYS, is_records_sorted=True
@@ -234,20 +234,18 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
 
         if n_days == 0:
             self._logger.warning(
-                f"{self}: all records expired, get_historical_market_value() returns "
-                f"{TSM_EMPTY_VALUES.MARKET_VALUE}"
+                f"{self}: all records expired, get_historical_market_value() returns 0"
             )
-            return TSM_EMPTY_VALUES.MARKET_VALUE
+            return 0
 
         return int(sum_market_value / n_days + 0.5)
 
     def get_weighted_market_value(self, ts_now: int) -> int:
         if not self:
             self._logger.warning(
-                f"{self}: no records, get_weighted_market_value() returns "
-                f"{TSM_EMPTY_VALUES.MARKET_VALUE}"
+                f"{self}: no records, get_weighted_market_value() returns 0"
             )
-            return TSM_EMPTY_VALUES.MARKET_VALUE
+            return 0
 
         days_average = self.average_by_day(
             self, ts_now, len(self.DAY_WEIGHTS), is_records_sorted=True
@@ -266,10 +264,9 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
             return int(sum_market_value / sum_weights + 0.5)
         else:
             self._logger.warning(
-                f"{self}: all records expired, get_weighted_market_value() returns "
-                f"{TSM_EMPTY_VALUES.MARKET_VALUE}"
+                f"{self}: all records expired, get_weighted_market_value() returns 0"
             )
-            return TSM_EMPTY_VALUES.MARKET_VALUE
+            return 0
 
 
 # def bound_cache(func: Callable) -> Callable:
@@ -502,6 +499,84 @@ class MapItemStringMarketValueRecord(
     """
 
     __root__: Dict[ItemString, MarketValueRecord] = Field(default_factory=dict)
+    MAX_JUMP_MUL: ClassVar[float] = 1.2
+    MAX_STD_MUL: ClassVar[float] = 1.5
+    SAMPLE_LO: ClassVar[float] = 0.15
+    SAMPLE_HI: ClassVar[float] = 0.3
+
+    @classmethod
+    def calc_market_value(cls, item_n: int, price_groups: Iterable[Tuple[int, int]]):
+        """calculate market value from a list of (price, quantity) tuples
+        `price_groups` is a list of tuples of (price, quantity), sorted by price.
+        a older version of this function used to take just a list of prices (by
+        inflating `price_groups`) - albeit the intuitiveness, takes 10x more time to
+        run.
+
+        sources:
+        https://web.archive.org/web/20200609203103/https://support.tradeskillmaster.com/display/KB/AuctionDB+Market+Value
+        https://github.com/WouterBink/TradeSkillMaster-1/blob/master/TradeSkillMaster_AuctionDB/Modules/data.lua
+        """
+
+        #         lim0        lim1
+        #         |           |
+        # 0 1 2 3 4 5 6 7 8 9 10 11
+        # print()
+        if item_n == 0:
+            return None
+
+        lo, hi = int(item_n * cls.SAMPLE_LO), int(item_n * cls.SAMPLE_HI)
+        samples = []
+        samples_s = 0
+        samples_n = 0
+        last_sample = None
+        # print()
+        for price, price_quantity in price_groups:
+            if (
+                last_sample
+                and samples_n >= lo
+                and (samples_n >= hi or price >= cls.MAX_JUMP_MUL * last_sample[0])
+            ):
+                break
+
+            samples.append([price, price_quantity])
+            samples_n += price_quantity
+            samples_s += price * price_quantity
+
+            if samples_n > hi:
+                off_by = samples_n - hi
+                samples[-1][1] -= off_by
+                samples_n -= off_by
+                samples_s -= samples[-1][0] * off_by
+
+                if samples[-1][1] == 0:
+                    if last_sample:
+                        samples.pop()
+                    else:
+                        samples[-1][1] = 1
+                        samples_n += 1
+                        samples_s += samples[-1][0]
+
+                break
+
+            last_sample = (price, price_quantity)
+
+        # print(f"{samples=}, {samples_s=}, {samples_n=}")
+        samples_mean = samples_s / samples_n
+        samples_variance = 0
+        for price, price_quantity in samples:
+            samples_variance += (price - samples_mean) ** 2 * price_quantity
+        ddof = 0 if samples_n == item_n else 1
+        samples_std = (
+            np.sqrt(samples_variance / (samples_n - ddof)) if samples_n > 1 else 0
+        )
+        samples_wstd = samples_std * cls.MAX_STD_MUL
+
+        for price, price_quantity in samples:
+            if np.abs(price - samples_mean) > samples_wstd:
+                samples_s -= price * price_quantity
+                samples_n -= price_quantity
+
+        return samples_s / samples_n
 
     @classmethod
     def _heap_pop_all(cls, heap: list) -> Generator[Tuple[int, int], None, None]:
@@ -535,7 +610,7 @@ class MapItemStringMarketValueRecord(
             heappush(temp[item_string][1], (price, quantity))
 
         for item_string in temp:
-            market_value = TSM_Math.calc_market_value(
+            market_value = cls.calc_market_value(
                 temp[item_string][0], cls._heap_pop_all(temp[item_string][1])
             )
             if market_value:
