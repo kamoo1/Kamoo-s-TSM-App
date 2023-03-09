@@ -157,9 +157,9 @@ class TestModels(TestCase):
         for mvr in record_list:
             records.add(mvr, sort=False)
 
-        self.assertEqual(records.get_recent_market_value(), 90)
-        self.assertEqual(records.get_recent_num_auctions(), 900)
-        self.assertEqual(records.get_recent_min_buyout(), 9000)
+        self.assertEqual(records.get_recent_market_value(9), 90)
+        self.assertEqual(records.get_recent_num_auctions(9), 900)
+        self.assertEqual(records.get_recent_min_buyout(9), 9000)
 
     def test_historical(self):
         # average mv of 60 days, first average by day then by 60 days

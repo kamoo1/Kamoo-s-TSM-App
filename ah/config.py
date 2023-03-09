@@ -5,7 +5,11 @@ from ah.fs import get_temp_path
 
 BN_CLIENT_ID = os.environ.get("BN_CLIENT_ID")
 BN_CLIENT_SECRET = os.environ.get("BN_CLIENT_SECRET")
-DATA_BASE_PATH = get_temp_path()
+TEMP_PATH = get_temp_path()
+DEFAULT_DB_PATH = os.path.join(TEMP_PATH, "ah_db")
+DEFAULT_EXPORT_PATH = os.path.join(TEMP_PATH, "ah_export.lua")
+DEFAULT_COMPRESS_DB = True
 APP_NAME = "ah"
 MARKET_VALUE_RECORD_EXPIRES = 60 * SECONDS_IN.DAY
-USE_COMPRESSION_FOR_STORAGE = True
+REGIONS = ["us", "eu", "kr", "tw"]
+LOGGING_LEVEL = os.environ.get("LOGGING_LEVEL", "INFO")

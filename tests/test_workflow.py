@@ -2,7 +2,6 @@ from unittest import TestCase, mock
 from random import shuffle, randint
 from tempfile import TemporaryDirectory
 import hashlib
-import time
 
 from ah.task_manager import TaskManager
 from ah.models import (
@@ -12,8 +11,7 @@ from ah.models import (
     ItemString,
     ItemStringTypeEnum,
 )
-from ah.tsm_exporter import TSMExporter
-from ah.storage import TextFile
+from ah.__main__ import main, parse_args
 
 
 class DummyAPI:
@@ -146,7 +144,7 @@ class TestWorkflow(TestCase):
         )
         timestamp = resp.timestamp
         increments = MapItemStringMarketValueRecord.from_response(resp, timestamp)
-        task_manager.update_db(file, increments)
+        task_manager.update_db(file, increments, timestamp)
 
         map_item_string_records = MapItemStringMarketValueRecords.from_file(file)
         self.assertEqual(expected_number_of_entries, len(map_item_string_records))
@@ -235,7 +233,9 @@ class TestWorkflow(TestCase):
             )
 
             for i in range(1, 10):
-                map_id_records = task_manager.update_db(file, increments)
+                map_id_records = task_manager.update_db(
+                    file, increments, test_resp.timestamp
+                )
                 # map_id_records = MapItemStringMarketValueRecords.from_file(file)
                 self.assertEqual(expected_item_entries, len(map_id_records))
 
@@ -253,26 +253,41 @@ class TestWorkflow(TestCase):
     @mock.patch("time.time", return_value=1000)
     def test_work_flow_2(self, *args):
         temp = TemporaryDirectory()
-        task_manager = TaskManager(
-            DummyAPI(),
-            temp.name,
-            data_use_compression=True,
-        )
-        export_file = TextFile(f"{temp.name}/export.txt")
-        with temp:
-            exporter = TSMExporter()
-            task_manager.update_dbs_under_region(
-                "us", exporter=exporter, export_file=export_file
-            )
-            task_manager.update_dbs_under_region(
-                "us", exporter=exporter, export_file=export_file
-            )
 
+        region = "us"
+        db_path = f"{temp.name}/db"
+        export_path = f"{temp.name}/export.lua"
+        compress_db = True
+        api = DummyAPI()
+        with temp:
+            main(
+                db_path,
+                export_path,
+                compress_db,
+                region,
+                None,
+                api,
+            )
             # get sha256 of the file
-            with open(export_file.file_path, "rb") as f:
+            with open(export_path, "rb") as f:
                 content = f.read()
                 h = hashlib.sha256(content).hexdigest()
                 self.assertEqual(
                     h,
                     "c208ddbf05331c7f6a9d36d386f80bce03ef4fd0be6e13b894efba9a40231198",
                 )
+
+    def test_parse_args(self):
+        raw_args = [
+            "--db_path",
+            "db",
+            "--export_path",
+            "export",
+            "--compress_db",
+            "us",
+        ]
+        args = parse_args(raw_args)
+        self.assertEqual(args.region, "us")
+        self.assertEqual(args.db_path, "db")
+        self.assertEqual(args.export_path, "export")
+        self.assertEqual(args.compress_db, True)

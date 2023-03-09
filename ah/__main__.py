@@ -1,65 +1,67 @@
-import json
-import time
-import os
+import sys
 import logging
+import argparse
 
 from ah import config
 from ah.task_manager import TaskManager
-from ah.cache import Cache
 from ah.api import API
-from ah.fs import get_temp_path
+from ah.cache import Cache
 from ah.tsm_exporter import TSMExporter
 from ah.storage import TextFile
 
 
-def pprint(obj):
-    print(json.dumps(obj, indent=4, ensure_ascii=False))
-
-
-def test():
-    data_base_path = get_temp_path()
-    cache = Cache(data_base_path, config.APP_NAME)
-    logging.basicConfig(level=logging.DEBUG)
-    api = API(config.BN_CLIENT_ID, config.BN_CLIENT_SECRET, cache)
-    # ah = TaskManager(api)
-    # # connected_realms = ah.get_connected_realms("tw")
-    # # pprint(connected_realms)
-    # # auctions = ah.get_auctions("tw", 980)
-    # # pprint(auctions)
-    # resp = ah.request_auctions("tw", 980)
-    # inc = ah.resp_to_increments(resp, time.time())
-    # print(inc)
-    # resp = ah._pull_connected_realms("tw")
-    # pprint(resp)
-
-    # resp = ah.request_commodities("tw")
-    # timestamp = time.time()
-    # increments = ah.resp_to_increments(resp, timestamp)
-    # ah.update_commodities_market_value_file("tw", increments)
-
-    # pprint(commodities)
-    # z = ah._get_timezone("us")
-    # print(z)
-    # comm_market_values = ah.get_commodities_mv_increment("tw")
-    # print(comm_market_values[197788])
-    # for i in range(30 * 6):
-    #     print(i)
-    #     ah.update_commodities_mv("us")
-
-    data_path = os.path.join([config.DATA_BASE_PATH, config.APP_NAME])
+def main(
+    db_path: str = None,
+    export_path: str = None,
+    compress_db: bool = None,
+    region: str = None,
+    cache: Cache = None,
+    api: API = None,
+):
+    if api is None:
+        if cache is None:
+            cache = Cache(config.TEMP_PATH, config.APP_NAME)
+        api = API(
+            config.BN_CLIENT_ID,
+            config.BN_CLIENT_SECRET,
+            cache,
+        )
     task_manager = TaskManager(
         api,
-        data_path,
-        data_use_compression=True,
+        db_path,
+        data_use_compression=compress_db,
         records_expires_in=config.MARKET_VALUE_RECORD_EXPIRES,
     )
-    # TODO: change path here
-    export_file = TextFile("./export.txt")
+    export_file = TextFile(export_path)
     exporter = TSMExporter()
     task_manager.update_dbs_under_region(
-        "tw", exporter=exporter, export_file=export_file
+        region, exporter=exporter, export_file=export_file
     )
+
+
+def parse_args(raw_args):
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--db_path", help="Path to database", default=config.TEMP_PATH, type=str
+    )
+    parser.add_argument(
+        "--export_path",
+        help="Export path",
+        default=config.DEFAULT_EXPORT_PATH,
+        type=str,
+    )
+    parser.add_argument(
+        "--compress_db",
+        help="Use compression for DB files",
+        default=config.DEFAULT_COMPRESS_DB,
+        action="store_true",
+    )
+    parser.add_argument("region", help="Region to export", choices=config.REGIONS)
+    args = parser.parse_args(raw_args)
+    return args
 
 
 if __name__ == "__main__":
-    test()
+    logging.basicConfig(level=config.LOGGING_LEVEL)
+    args = parse_args(sys.argv[1:])
+    main(**vars(args))

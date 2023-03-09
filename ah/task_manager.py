@@ -179,7 +179,7 @@ class TaskManager:
         return increment
 
     def update_db(
-        self, file: BinaryFile, increment: MapItemStringMarketValueRecord
+        self, file: BinaryFile, increment: MapItemStringMarketValueRecord, ts_now: int
     ) -> Optional["MapItemStringMarketValueRecords"]:
         """
         Update db file.
@@ -195,9 +195,7 @@ class TaskManager:
         else:
             records_map = MapItemStringMarketValueRecords()
         n_added_records, n_added_entries = records_map.update_increment(increment)
-        n_removed_records = records_map.remove_expired(
-            time.time() - self.records_expires_in
-        )
+        n_removed_records = records_map.remove_expired(ts_now - self.records_expires_in)
         records_map.to_file(file)
         self._logger.info(
             f"DB update: {file.file_path}, {n_added_records=} "
@@ -235,6 +233,7 @@ class TaskManager:
         # ponder on the ramifications.
         region_data = MapItemStringMarketValueRecords()
         crids = self._pull_connected_realms_ids(region)
+        ts_update_begin = int(time.time())
         # realms = self._pull_connected_realms(region)
         # print(realms)
         if exporter:
@@ -244,7 +243,8 @@ class TaskManager:
             increment = self.pull_increment(region, crid)
             if increment:
                 file = self.get_db_file(region, crid=crid)
-                auctions_data = self.update_db(file, increment)
+                auctions_data = self.update_db(file, increment, ts_update_begin)
+                ts_update_end = int(time.time())
                 region_data.extend(auctions_data)
                 if exporter:
                     for export_realm in self.REALM_EXPORTS:
@@ -255,13 +255,15 @@ class TaskManager:
                             export_realm["type"],
                             # TODO: map crid to (one of the) realm name? maybe?
                             crid,
-                            int(time.time()),
+                            ts_update_begin,
+                            ts_update_end,
                         )
 
         increment = self.pull_increment(region)
         if increment:
             file = self.get_db_file(region)
-            commodities_data = self.update_db(file, increment)
+            commodities_data = self.update_db(file, increment, ts_update_begin)
+            ts_update_end = int(time.time())
             region_data.extend(commodities_data)
 
             if exporter:
@@ -271,7 +273,8 @@ class TaskManager:
                     self.COMMODITIES_EXPORT["fields"],
                     self.COMMODITIES_EXPORT["type"],
                     region,
-                    int(time.time()),
+                    ts_update_begin,
+                    ts_update_end,
                 )
 
         if exporter and region_data:
@@ -282,7 +285,8 @@ class TaskManager:
                     export_region["fields"],
                     export_region["type"],
                     region,
-                    int(time.time()),
+                    ts_update_begin,
+                    ts_update_end,
                 )
 
     # @classmethod

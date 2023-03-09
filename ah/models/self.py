@@ -32,6 +32,28 @@ __all__ = (
     "ItemStringTypeEnum",
 )
 
+"""
+# This is a rough representation of the old TSM's data structure,
+# note that it will not be implemented in the same way.
+
+data = {
+    "item_string": {
+        "records" : {
+            ...,
+            # only has mv avg if not today
+            "day - 1": 1000,
+            # rolling average
+            "day": {"market_value_avg": 1000, "n_scan": 2}
+        },
+        "last_record": ...,
+        "min_buyout": ...,
+        # 14 day weighted mv
+        "market_value": ...,
+    },
+    ...
+}
+"""
+
 
 @total_ordering
 class MarketValueRecord(_BaseModel):
@@ -116,38 +138,34 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
         self.__root__ = self[i:]
         return i
 
-    def get_recent_num_auctions(self) -> Optional[int]:
+    def get_recent_num_auctions(self, ts_last_update_begin: int) -> int:
         # return newest record
         # TODO: check that records without any auctions (None marketvalue) are added,
         # because sometimes there are no auctions for an item
-        if self:
+        if (
+            self
+            and self[-1].timestamp >= ts_last_update_begin
+            and self[-1].num_auctions
+        ):
             return self[-1].num_auctions
+        else:
+            return 0
 
-        self._logger.warning("%r: no records, get_num_auctions() returns None", self)
-        return None
-
-    def get_recent_min_buyout(self) -> Optional[int]:
-        if self:
+    def get_recent_min_buyout(self, ts_last_update_begin: int) -> int:
+        if self and self[-1].timestamp >= ts_last_update_begin and self[-1].min_buyout:
             return self[-1].min_buyout
+        else:
+            return 0
 
-        self._logger.warning("%r: no records, get_min_buyout() returns None", self)
-        return None
-
-    def get_recent_market_value(self) -> Union[int, None]:
-        if not self:
-            self._logger.warning(
-                "%r: no records, get_recent_market_value() returns Nonoe", self
-            )
-            return None
-
-        if self[-1].market_value is None:
-            self._logger.warning(
-                "%r: last record has no market value, get_recent_market_value() "
-                "returns None",
-                self,
-            )
-
-        return self[-1].market_value
+    def get_recent_market_value(self, ts_last_update_begin) -> int:
+        if (
+            self
+            and self[-1].timestamp >= ts_last_update_begin
+            and self[-1].market_value
+        ):
+            return self[-1].market_value
+        else:
+            return 0
 
     @classmethod
     def average_by_day(
@@ -198,7 +216,9 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
         # the average of those 60 days.
 
         if not self:
-            # TODO: should we return 0?
+            self._logger.warning(
+                f"{self}: no records, get_historical_market_value() returns None"
+            )
             return None
 
         days_average = self.average_by_day(
@@ -213,14 +233,21 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
                 n_days += 1
 
         if n_days == 0:
-            return None
+            self._logger.warning(
+                f"{self}: all records expired, get_historical_market_value() returns "
+                f"{TSM_EMPTY_VALUES.MARKET_VALUE}"
+            )
+            return TSM_EMPTY_VALUES.MARKET_VALUE
 
         return int(sum_market_value / n_days + 0.5)
 
     def get_weighted_market_value(self, ts_now: int) -> int:
         if not self:
-            # TODO: should we return 0?
-            return 0
+            self._logger.warning(
+                f"{self}: no records, get_weighted_market_value() returns "
+                f"{TSM_EMPTY_VALUES.MARKET_VALUE}"
+            )
+            return TSM_EMPTY_VALUES.MARKET_VALUE
 
         days_average = self.average_by_day(
             self, ts_now, len(self.DAY_WEIGHTS), is_records_sorted=True
@@ -233,8 +260,16 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
                 sum_market_value += avg * self.DAY_WEIGHTS[i]
                 sum_weights += self.DAY_WEIGHTS[i]
 
-        # TODO: should we return 0?
-        return int(sum_market_value / sum_weights + 0.5) if sum_weights else 0
+        # should return 0 according to TSM
+        # https://github.com/WouterBink/TradeSkillMaster-1/blob/master/TradeSkillMaster_AuctionDB/Modules/data.lua#L115
+        if sum_weights:
+            return int(sum_market_value / sum_weights + 0.5)
+        else:
+            self._logger.warning(
+                f"{self}: all records expired, get_weighted_market_value() returns "
+                f"{TSM_EMPTY_VALUES.MARKET_VALUE}"
+            )
+            return TSM_EMPTY_VALUES.MARKET_VALUE
 
 
 # def bound_cache(func: Callable) -> Callable:

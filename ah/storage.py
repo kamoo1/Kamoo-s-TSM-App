@@ -35,8 +35,10 @@ class JSONLStorage(object):
 
 class BaseFile:
     def __init__(self, file_path: str) -> None:
+        file_path = os.path.normcase(file_path)
         base_path = os.path.dirname(file_path)
-        ensure_path(base_path)
+        if base_path:
+            ensure_path(base_path)
         self.file_path = file_path
 
     def __repr__(self) -> str:

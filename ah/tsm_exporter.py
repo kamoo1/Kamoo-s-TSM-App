@@ -24,7 +24,8 @@ class TSMExporter:
         fields: List[str],
         type_: str,
         region_or_realm: str,
-        update_ts: int,
+        ts_update_begin: int,
+        ts_update_end: int,
     ) -> None:
         cls._logger.info(f"Exporting {type_} for {region_or_realm}...")
         items_data = []
@@ -33,39 +34,50 @@ class TSMExporter:
             # 1. numeral itemstring being string
             # 2. 10-based numbers
             item_data = []
+            # skip item if all numbers are 0 or None
+            is_skip_item = True
             for field in fields:
                 if field == "minBuyout":
-                    value = records.get_recent_min_buyout()
+                    value = records.get_recent_min_buyout(ts_update_begin)
+                    if value:
+                        is_skip_item = False
                 elif field == "numAuctions":
-                    value = records.get_recent_num_auctions()
+                    value = records.get_recent_num_auctions(ts_update_begin)
+                    if value:
+                        is_skip_item = False
                 elif field == "marketValueRecent":
-                    value = records.get_recent_market_value()
+                    value = records.get_recent_market_value(ts_update_begin)
+                    if value:
+                        is_skip_item = False
                 elif field in ["historical", "regionHistorical"]:
-                    value = records.get_historical_market_value(update_ts)
+                    value = records.get_historical_market_value(ts_update_end)
+                    if value:
+                        is_skip_item = False
                 elif field in ["marketValue", "regionMarketValue"]:
-                    value = records.get_weighted_market_value(update_ts)
+                    value = records.get_weighted_market_value(ts_update_end)
+                    if value:
+                        is_skip_item = False
                 elif field == "itemString":
-                    value = item_string
+                    value = item_string.to_str()
+                    if not set(value) < cls.NUMERIC_SET:
+                        value = '"' + value + '"'
                 else:
                     raise ValueError(f"unsupported field {field}.")
 
-                if value is None:
-                    # TODO: none value, figure out what to do
-                    value = "0"
-                elif isinstance(value, ItemString):
-                    value = value.to_str()
-                    # TODO: review set operations
-                    if not set(value) < cls.NUMERIC_SET:
-                        value = '"' + value + '"'
-
-                elif isinstance(value, int):
+                if isinstance(value, int):
                     value = cls.baseN(value, 26)
                 elif isinstance(value, float):
                     value = str(value)
+                elif isinstance(value, str):
+                    pass
                 else:
                     raise ValueError(f"unsupported type {type(value)}")
 
                 item_data.append(value)
+
+            if is_skip_item:
+                cls._logger.warning(f"Skip item {item_string} due to no data.")
+                continue
 
             item_text = "{" + ",".join(item_data) + "}"
             items_data.append(item_text)
@@ -74,7 +86,7 @@ class TSMExporter:
         text_out = cls.TEMPLATE.format(
             data_type=type_,
             region_or_realm=region_or_realm,
-            ts=update_ts,
+            ts=ts_update_begin,
             fields=fields_str,
             data=",".join(items_data),
         )
