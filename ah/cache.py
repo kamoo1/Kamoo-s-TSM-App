@@ -78,7 +78,7 @@ class BoundCacheMixin:
         self._cache = cache
 
 
-def bound_json_cache(expires: int):
+def bound_cache(expires: int, is_json: bool = True):
     """a decorator to cache the result of a function which returns a json-like object,
     key is the hash of the function name and it's arguments.
     """
@@ -93,9 +93,16 @@ def bound_json_cache(expires: int):
                 cache = that._cache.get(key, expires=expires)
                 if cache is None:
                     value = func(that, *args, **kwargs)
-                    that._cache.set(key, json.dumps(value).encode())
+                    if is_json:
+                        set_value = json.dumps(value).encode()
+                    else:
+                        set_value = value
+
+                    that._cache.set(key, set_value)
                 else:
-                    value = json.loads(cache.decode())
+                    value = cache
+                    if is_json:
+                        value = json.loads(value.decode())
 
             else:
                 value = func(that, *args, **kwargs)

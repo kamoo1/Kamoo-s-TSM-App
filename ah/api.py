@@ -1,12 +1,13 @@
 import re
+import requests
 from typing import Optional
 
 from ah.vendors.blizzardapi import BlizzardApi
-from ah.cache import bound_json_cache, BoundCacheMixin, Cache
+from ah.cache import bound_cache, BoundCacheMixin, Cache
 from ah.defs import SECONDS_IN
 
 
-class APIWrapper(BoundCacheMixin):
+class BNAPIWrapper(BoundCacheMixin):
     def __init__(self, client_id, client_secret, cache: Cache, *args, **kwargs) -> None:
         super().__init__(*args, cache=cache, **kwargs)
         self._api = BlizzardApi(client_id, client_secret)
@@ -20,13 +21,13 @@ class APIWrapper(BoundCacheMixin):
         else:
             return "en_US"
 
-    @bound_json_cache(SECONDS_IN.WEEK)
+    @bound_cache(SECONDS_IN.WEEK)
     def get_connected_realms_index(self, region, locale=None):
         if not locale:
             locale = self.get_default_locale(region)
         return self._api.wow.game_data.get_connected_realms_index(region, locale)
 
-    @bound_json_cache(SECONDS_IN.WEEK)
+    @bound_cache(SECONDS_IN.WEEK)
     def get_connected_realm(self, region, connected_realm_id, locale=None):
         if not locale:
             locale = self.get_default_locale(region)
@@ -34,20 +35,20 @@ class APIWrapper(BoundCacheMixin):
             region, locale, connected_realm_id
         )
 
-    @bound_json_cache(SECONDS_IN.HOUR)
+    @bound_cache(SECONDS_IN.HOUR)
     def get_auctions(self, region, connected_realm_id, locale=None):
         if not locale:
             locale = self.get_default_locale(region)
         return self._api.wow.game_data.get_auctions(region, locale, connected_realm_id)
 
-    @bound_json_cache(SECONDS_IN.HOUR)
+    @bound_cache(SECONDS_IN.HOUR)
     def get_commodities(self, region, locale=None):
         if not locale:
             locale = self.get_default_locale(region)
         return self._api.wow.game_data.get_commodities(region, locale)
 
 
-class API:
+class BNAPI:
     def __init__(
         self,
         client_id: Optional[str] = None,
@@ -63,7 +64,9 @@ class API:
                     "client_id, client_secret and cache must be provided "
                     "if no wrapper is provided."
                 )
-            self.wrapper = APIWrapper(client_id, client_secret, cache, *args, **kwargs)
+            self.wrapper = BNAPIWrapper(
+                client_id, client_secret, cache, *args, **kwargs
+            )
         else:
             self.wrapper = wrapper
 
@@ -141,3 +144,29 @@ class API:
         """NOTE: CRs under same region may have different timezones!"""
         connected_realm = self._api.get_connected_realm(region, connected_realm_id)
         return connected_realm["realms"][0]["timezone"]
+
+
+class GHAPI(BoundCacheMixin):
+    API_TEMPLATE = "https://api.github.com/repos/{user}/{repo}/releases/latest"
+
+    def __init__(self, cache: Cache) -> None:
+        super().__init__(cache=cache)
+
+    @bound_cache(SECONDS_IN.HOUR)
+    def get_assets_uri(self, owner, repo):
+        resp = requests.get(f"https://api.github.com/repos/{owner}/{repo}/releases")
+        if resp.status_code != 200:
+            raise ValueError(f"Failed to get releases: {resp.content}")
+        releases = resp.json()
+        ret = {}
+        for asset in releases["assets"]:
+            ret[asset["name"]] = asset["browser_download_url"]
+
+        return ret
+
+    @bound_cache(SECONDS_IN.HOUR, is_json=False)
+    def get_asset(self, url) -> bytes:
+        resp = requests.get(url)
+        if resp.status_code != 200:
+            raise ValueError(f"Failed to get asset: {resp.content}")
+        return resp.content

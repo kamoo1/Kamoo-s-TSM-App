@@ -4,7 +4,7 @@ import argparse
 
 from ah import config
 from ah.task_manager import TaskManager
-from ah.api import API
+from ah.api import BNAPI
 from ah.db import AuctionDB
 from ah.cache import Cache
 
@@ -14,18 +14,18 @@ def main(
     compress_db: bool = None,
     region: str = None,
     cache: Cache = None,
-    api: API = None,
+    bn_api: BNAPI = None,
 ):
-    if api is None:
+    if bn_api is None:
         if cache is None:
             cache = Cache(config.TEMP_PATH, config.APP_NAME)
-        api = API(
+        bn_api = BNAPI(
             config.BN_CLIENT_ID,
             config.BN_CLIENT_SECRET,
             cache,
         )
     db = AuctionDB(db_path, config.MARKET_VALUE_RECORD_EXPIRES, compress_db)
-    task_manager = TaskManager(api, db)
+    task_manager = TaskManager(bn_api, db)
     task_manager.update_dbs_under_region(region)
 
 

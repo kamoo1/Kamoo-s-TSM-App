@@ -1,19 +1,16 @@
-from typing import List
-import urllib3
-import json
+from typing import List, Set
 import logging
 import sys
 import os
 import re
 
-if sys.platform == "win32":
-    import winreg
 
 from ah.models.self import MapItemStringMarketValueRecords
 from ah.storage import TextFile
-from ah.fs import ensure_path, get_temp_path
 from ah.db import AuctionDB
-from ah.api import API
+from ah.api import BNAPI, GHAPI
+from ah.cache import Cache
+from ah import config
 
 
 class TSMExporter:
@@ -81,29 +78,17 @@ class TSMExporter:
     )
     _logger = logging.getLogger("TSMExporter")
 
-    def __init__(self, api: API, db: AuctionDB, export_file: TextFile) -> None:
-        self.api = api
+    def __init__(self, bn_api: BNAPI, db: AuctionDB, export_file: TextFile) -> None:
+        self.bn_api = bn_api
         self.db = db
         self.export_file = export_file
 
     @classmethod
-    def download_db(cls, user: str, repo: str, db_path: str) -> None:
-        url = f"https://api.github.com/repos/{user}/{repo}/releases/latest"
-        http = urllib3.PoolManager()
-        r = http.request("GET", url)
-        data = json.loads(r.data.decode("utf-8"))
-        # download url under assets.browser_download_url
-        for asset in data["assets"]:
-            name = asset["name"]
-            if not cls.ASSET_MATCHER.match(name):
-                continue
-            download_url = asset["browser_download_url"]
-            r = http.request("GET", download_url)
-            with open(os.path.join(db_path, name), "wb") as f:
-                f.write(r.data)
-
-    @classmethod
     def find_warcraft_dir_windows(cls) -> str:
+        if sys.platform == "win32":
+            import winreg
+        else:
+            raise RuntimeError("Only support windows")
         key = winreg.OpenKey(
             winreg.HKEY_LOCAL_MACHINE,
             r"SOFTWARE\WOW6432Node\Blizzard Entertainment\World of Warcraft",
@@ -112,19 +97,14 @@ class TSMExporter:
         return os.path.normpath(path)
 
     @classmethod
-    def locate_line(cls, data: str, pos: int) -> int:
-        """Given pos, find start and end of the line where pos is in"""
-        start = pos
-        end = pos
-        while data[start] != "\n":
-            start -= 1
-        start += 1
-
-        while data[end] != "\n":
-            end += 1
-        end += 1
-
-        return start, end
+    def get_tsm_export_path(cls, warcraft_dir: str) -> str:
+        return os.path.join(
+            warcraft_dir,
+            "Interface",
+            "AddOns",
+            "TradeSkillMaster_AppHelper",
+            "AppData.lua",
+        )
 
     @classmethod
     def baseN(cls, num, b, numerals="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
@@ -133,7 +113,7 @@ class TSMExporter:
         )
 
     @classmethod
-    def append_to_file(
+    def export_append(
         cls,
         file: TextFile,
         map_records: MapItemStringMarketValueRecords,
@@ -209,44 +189,102 @@ class TSMExporter:
         with file.open("a", newline="\n") as f:
             f.write(text_out + "\n")
 
-    def export(self, region: str, realms: List[str]):
+    def export_region(self, region_name: str, realm_names: Set[str]):
+        meta_file = self.db.get_meta_file(region_name)
+        meta = self.db.load_meta(meta_file)
+        if not meta:
+            raise ValueError(f"meta file {meta_file} not found or Empty.")
+        ts_update_start = meta["start_ts"]
+        ts_update_end = meta["end_ts"]
+
+        crs = self.bn_api.pull_connected_realms(region_name)
         region_data = MapItemStringMarketValueRecords()
-        crids = self.api.pull_connected_realms_ids(region)
-        for crid in crids:
-            cr_auction_file = self.db.get_db_file(region, crid)
+
+        for crid, cr in crs.items():
+            # find all realms user want to export in a cr group
+            realm_names_ = set(realm["name"] for realm in cr["realms"])
+            realm_names_export = realm_names & realm_names_
+
+            cr_auction_file = self.db.get_db_file(region_name, crid)
             cr_auction_data = self.db.load_db(cr_auction_file)
             if cr_auction_data:
                 region_data.extend(cr_auction_data)
                 for export_realm in self.REALM_EXPORTS:
-                    self.append_to_file(
-                        self.export_file,
-                        cr_auction_data,
-                        export_realm["fields"],
-                        export_realm["type"],
-                        ...,
-                        ts_begin,
-                        ts_end,
-                    )
+                    for name in realm_names_export:
+                        # realms in same cr group share
+                        # the same auction house data
+                        self.export_append(
+                            self.export_file,
+                            cr_auction_data,
+                            export_realm["fields"],
+                            export_realm["type"],
+                            name,
+                            ts_update_start,
+                            ts_update_end,
+                        )
 
-        region_commodity_file = self.db.get_db_file(region)
+        region_commodity_file = self.db.get_db_file(region_name)
         region_commodity_data = self.db.load_db(region_commodity_file)
         if region_commodity_data:
             region_data.extend(region_commodity_data)
-            self.append_to_file(...)
+            self.export_append(
+                self.export_file,
+                region_commodity_data,
+                self.COMMODITY_EXPORT["fields"],
+                self.COMMODITY_EXPORT["type"],
+                region_name.upper(),
+                ts_update_start,
+                ts_update_end,
+            )
 
         if region_data:
-            self.append_to_file(...)
+            self.export_append(
+                self.export_file,
+                region_data,
+                self.REGION_EXPORT["fields"],
+                self.REGION_EXPORT["type"],
+                region_name.upper(),
+                ts_update_start,
+                ts_update_end,
+            )
 
 
-if sys.platform != "win32":
-    TSMExporter = None
+def main(
+    repo: str = None,
+    db_path: str = None,
+    compress_db: bool = None,
+    export_region: str = None,
+    export_realms: List[str] = None,
+    export_path: str = None,
+    bn_api: BNAPI = None,
+    cache: Cache = None,
+):
+    if cache is None:
+        cache = Cache(config.TEMP_PATH, config.APP_NAME)
 
+    if bn_api is None:
+        bn_api = BNAPI(
+            config.BN_CLIENT_ID,
+            config.BN_CLIENT_SECRET,
+            cache,
+        )
 
-def main(repo_owner=None, repo_name=None):
-    exporter = TSMExporter()
-    db_path = os.path.join(get_temp_path(), "ah_db")
-    ensure_path(db_path)
-    exporter.download_db(repo_owner, repo_name, db_path)
+    gh_api = GHAPI(cache)
+    db = AuctionDB(
+        db_path,
+        config.MARKET_VALUE_RECORD_EXPIRES,
+        compress_db,
+        AuctionDB.MODE_REMOTE_R,
+        repo,
+        gh_api,
+    )
+
+    if not export_path:
+        export_path = TSMExporter.get_tsm_export_path()
+
+    export_file = TextFile(export_path)
+    exporter = TSMExporter(bn_api, db, export_file)
+    exporter.export_region(export_region, export_realms)
 
 
 if __name__ == "__main__":

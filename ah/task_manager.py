@@ -2,7 +2,7 @@ import time
 from logging import getLogger
 from typing import Optional
 
-from ah.api import API
+from ah.api import BNAPI
 from ah.models import (
     AuctionsResponse,
     CommoditiesResponse,
@@ -14,11 +14,11 @@ from ah.db import AuctionDB
 class TaskManager:
     def __init__(
         self,
-        api: API,
+        bn_api: BNAPI,
         db: AuctionDB,
     ) -> None:
         self._logger = getLogger(self.__class__.__name__)
-        self.api = api
+        self.bn_api = bn_api
         self.db = db
 
     def pull_increment(
@@ -26,7 +26,7 @@ class TaskManager:
     ) -> Optional[MapItemStringMarketValueRecord]:
         if crid:
             try:
-                resp = AuctionsResponse.from_api(self.api, region, crid)
+                resp = AuctionsResponse.from_api(self.bn_api, region, crid)
             except Exception as e:
                 self._logger.error(
                     f"Failed to request auctions for {region}-{crid}: {e}"
@@ -34,7 +34,7 @@ class TaskManager:
                 return
         else:
             try:
-                resp = CommoditiesResponse.from_api(self.api, region)
+                resp = CommoditiesResponse.from_api(self.bn_api, region)
             except Exception as e:
                 self._logger.error(f"Failed to request commodities for {region}: {e}")
                 return
@@ -44,7 +44,7 @@ class TaskManager:
 
     def update_dbs_under_region(self, region: str) -> int:
         begin_ts = int(time.time())
-        crids = self.api.pull_connected_realms_ids(region)
+        crids = self.bn_api.pull_connected_realms_ids(region)
         for crid in crids:
             increment = self.pull_increment(region, crid)
             if increment:

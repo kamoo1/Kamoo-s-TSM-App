@@ -36,10 +36,12 @@ class JSONLStorage(object):
 class BaseFile:
     def __init__(self, file_path: str) -> None:
         file_path = os.path.normcase(file_path)
+        file_name = os.path.basename(file_path)
         base_path = os.path.dirname(file_path)
         if base_path:
             ensure_path(base_path)
         self.file_path = file_path
+        self.file_name = file_name
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
@@ -50,6 +52,9 @@ class BaseFile:
 
     def remove(self):
         remove_file(self.file_path)
+
+    def open(self, mode="rb"):
+        raise NotImplementedError
 
 
 class TextFile(BaseFile):
