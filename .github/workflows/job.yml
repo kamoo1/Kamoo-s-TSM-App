@@ -38,7 +38,6 @@ jobs:
       run: |
         echo "JOB_START_TS=$(date +%s)" >> $GITHUB_ENV
         echo "DB_PATH=/tmp/ah_db" >> $GITHUB_ENV
-        echo "EXPORT_PATH=/tmp/AppData.lua" >> $GITHUB_ENV
         echo "FLAG_COMPRESS=--compress_db" >> $GITHUB_ENV
         echo "REGION=tw" >> $GITHUB_ENV
     - name: Get AH Database File from GitHub Cache
@@ -59,12 +58,13 @@ jobs:
       run: >
         python -m ah
         --db_path ${{ env.DB_PATH }}
-        --export_path ${{ env.EXPORT_PATH }}
         ${{ env.FLAG_COMPRESS }}
         ${{ env.REGION }}
     - name: Release Export
       uses: softprops/action-gh-release@v1
       with:
         tag_name: latest
-        files: ${{ env.EXPORT_PATH }}
+        files: |
+          ${{ env.DB_PATH }}/*.gz
+          ${{ env.DB_PATH }}/*.bin
         name: Export ${{ env.JOB_START_TS }}

@@ -1,7 +1,7 @@
 from unittest import TestCase, mock
 from random import shuffle, randint
 from tempfile import TemporaryDirectory
-import hashlib
+import os
 
 from ah.task_manager import TaskManager
 from ah.models import (
@@ -256,38 +256,29 @@ class TestWorkflow(TestCase):
 
         region = "us"
         db_path = f"{temp.name}/db"
-        export_path = f"{temp.name}/export.lua"
         compress_db = True
         api = DummyAPI()
         with temp:
             main(
                 db_path,
-                export_path,
                 compress_db,
                 region,
                 None,
                 api,
             )
-            # get sha256 of the file
-            with open(export_path, "rb") as f:
-                content = f.read()
-                h = hashlib.sha256(content).hexdigest()
-                self.assertEqual(
-                    h,
-                    "eb75e2d7bbe182d1522388ac63b802578dee86c8580d43ccfefa7873abb2fb33",
-                )
+            # get all files under db_path
+            files = sorted(os.listdir(db_path))
+            expected = ["us-1-auctions.gz", "us-2-auctions.gz", "us-commodities.gz"]
+            self.assertListEqual(expected, files)
 
     def test_parse_args(self):
         raw_args = [
             "--db_path",
             "db",
-            "--export_path",
-            "export",
             "--compress_db",
             "us",
         ]
         args = parse_args(raw_args)
         self.assertEqual(args.region, "us")
         self.assertEqual(args.db_path, "db")
-        self.assertEqual(args.export_path, "export")
         self.assertEqual(args.compress_db, True)
