@@ -1,8 +1,6 @@
 import re
 import os
 import time
-import datetime
-import zoneinfo
 from logging import getLogger
 from typing import Optional
 
@@ -135,7 +133,12 @@ class TaskManager:
                 ret["timezone"] = realm["timezone"]
 
             ret["realms"].append(
-                {"id": realm["id"], "name": realm["name"], "slug": realm["slug"]}
+                {
+                    "id": realm["id"],
+                    "name": realm["name"],
+                    "slug": realm["slug"],
+                    "locale": realm["locale"],
+                }
             )
 
         return ret
