@@ -162,7 +162,7 @@ class TestModels(TestCase):
         )
         item_string = ItemString.from_item(item)
         self.assertEqual(item_string.type, ItemStringTypeEnum.PET)
-        self.assertEqual(item_string.id, item.pet_breed_id)
+        self.assertEqual(item_string.id, item.pet_species_id)
         # pets don't take bonuses & modifiers
         self.assertEqual(item_string.bonuses, None)
         self.assertEqual(item_string.mods, None)

@@ -183,7 +183,7 @@ class TaskManager:
                 self._logger.error(f"Failed to request commodities for {region}: {e}")
                 return
 
-        increment = MapItemStringMarketValueRecord.from_response(resp, resp.timestamp)
+        increment = MapItemStringMarketValueRecord.from_response(resp)
         return increment
 
     def update_db(

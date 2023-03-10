@@ -35,12 +35,14 @@ class DummyAPI:
                     "name": "realm1",
                     "slug": "realm-1",
                     "timezone": "America/New_York",
+                    "locale": "en_US",
                 },
                 {
                     "id": 2,
                     "name": "realm2",
                     "slug": "realm-2",
                     "timezone": "America/New_York",
+                    "locale": "en_US",
                 },
             ]
         }
@@ -143,7 +145,7 @@ class TestWorkflow(TestCase):
             self.mock_request_commodities_single_item(item_id, price_groups)
         )
         timestamp = resp.timestamp
-        increments = MapItemStringMarketValueRecord.from_response(resp, timestamp)
+        increments = MapItemStringMarketValueRecord.from_response(resp)
         task_manager.update_db(file, increments, timestamp)
 
         map_item_string_records = MapItemStringMarketValueRecords.from_file(file)
@@ -228,9 +230,7 @@ class TestWorkflow(TestCase):
             region = "us"
             crid = 123
             file = task_manager.get_db_file(region, crid)
-            increments = MapItemStringMarketValueRecord.from_response(
-                test_resp, timestamp
-            )
+            increments = MapItemStringMarketValueRecord.from_response(test_resp)
 
             for i in range(1, 10):
                 map_id_records = task_manager.update_db(

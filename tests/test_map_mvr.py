@@ -57,7 +57,7 @@ class TestModels(TestCase):
         return group, avg_price - price_delta
 
     @classmethod
-    def mock_response(cls, type_, n_item):
+    def mock_response(cls, type_, n_item, timestamp=None):
         expected = {}
         auctions = []
         auction_id = 0
@@ -101,28 +101,35 @@ class TestModels(TestCase):
                 "connected_realm": {},
                 "auctions": auctions,
                 "commodities": {},
+                "timestamp": timestamp,
             }
             resp = AuctionsResponse.parse_obj(obj)
         else:
             obj = {
                 "_links": {},
                 "auctions": auctions,
+                "timestamp": timestamp,
             }
             resp = CommoditiesResponse.parse_obj(obj)
 
         return resp, expected, min_price
 
     def test_increment(self):
-        resp, expected, min_price = self.mock_response("auction", 1)
-        increment = MapItemStringMarketValueRecord.from_response(resp, 1000)
+        timestamp = 1000
+        resp, expected, min_price = self.mock_response(
+            "auction", 1, timestamp=timestamp
+        )
+        increment = MapItemStringMarketValueRecord.from_response(resp)
         for item_string, record in increment.items():
             item_id = item_string.id
             self.assertEqual(record.market_value, expected[item_id][0])
             self.assertEqual(record.num_auctions, expected[item_id][1])
             self.assertEqual(record.min_buyout, min_price)
 
-        resp, expected, min_price = self.mock_response("commodity", 1)
-        increment = MapItemStringMarketValueRecord.from_response(resp, 1000)
+        resp, expected, min_price = self.mock_response(
+            "commodity", 1, timestamp=timestamp
+        )
+        increment = MapItemStringMarketValueRecord.from_response(resp)
         for item_string, record in increment.items():
             item_id = item_string.id
             self.assertEqual(record.market_value, expected[item_id][0])
