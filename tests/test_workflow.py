@@ -11,10 +11,12 @@ from ah.models import (
     ItemString,
     ItemStringTypeEnum,
 )
+from ah.api import API
+from ah.db import AuctionDB
 from ah.__main__ import main, parse_args
 
 
-class DummyAPI:
+class DummyAPIWrapper:
     def get_connected_realms_index(self, region):
         return {
             "connected_realms": [
@@ -137,16 +139,16 @@ class TestWorkflow(TestCase):
         item_id = "123"
         region = "us"
         task_manager = TaskManager(
-            DummyAPI(),
-            temp_path,
+            API(wrapper=DummyAPIWrapper()),
+            AuctionDB(temp_path)
         )
-        file = task_manager.get_db_file(region)
+        file = task_manager.db.get_db_file(region)
         resp = CommoditiesResponse.parse_obj(
             self.mock_request_commodities_single_item(item_id, price_groups)
         )
         timestamp = resp.timestamp
         increments = MapItemStringMarketValueRecord.from_response(resp)
-        task_manager.update_db(file, increments, timestamp)
+        task_manager.db.update_db(file, increments, timestamp)
 
         map_item_string_records = MapItemStringMarketValueRecords.from_file(file)
         self.assertEqual(expected_number_of_entries, len(map_item_string_records))
@@ -192,9 +194,10 @@ class TestWorkflow(TestCase):
 
     def test_work_flow_basic_integrity(self):
         temp = TemporaryDirectory()
+        db = AuctionDB(temp.name)
         task_manager = TaskManager(
-            DummyAPI(),
-            temp.name,
+            API(wrapper=DummyAPIWrapper()),
+            db,
         )
         with temp:
             item_count = 100
@@ -229,11 +232,11 @@ class TestWorkflow(TestCase):
             timestamp = test_resp.timestamp
             region = "us"
             crid = 123
-            file = task_manager.get_db_file(region, crid)
+            file = task_manager.db.get_db_file(region, crid)
             increments = MapItemStringMarketValueRecord.from_response(test_resp)
 
             for i in range(1, 10):
-                map_id_records = task_manager.update_db(
+                map_id_records = task_manager.db.update_db(
                     file, increments, test_resp.timestamp
                 )
                 # map_id_records = MapItemStringMarketValueRecords.from_file(file)
@@ -257,7 +260,7 @@ class TestWorkflow(TestCase):
         region = "us"
         db_path = f"{temp.name}/db"
         compress_db = True
-        api = DummyAPI()
+        api = API(wrapper=DummyAPIWrapper())
         with temp:
             main(
                 db_path,
@@ -268,7 +271,12 @@ class TestWorkflow(TestCase):
             )
             # get all files under db_path
             files = sorted(os.listdir(db_path))
-            expected = ["us-1-auctions.gz", "us-2-auctions.gz", "us-commodities.gz"]
+            expected = [
+                "meta-us.json",
+                "us-1-auctions.gz",
+                "us-2-auctions.gz",
+                "us-commodities.gz",
+            ]
             self.assertListEqual(expected, files)
 
     def test_parse_args(self):

@@ -4,7 +4,6 @@ from enum import Enum
 from typing import List, Iterator, Literal, Union, Any, Dict, Optional
 
 from pydantic import Field, root_validator
-from pydantic.main import ModelMetaclass
 
 from ah.models.base import _BaseModel
 from ah.api import API
@@ -221,7 +220,7 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
     def from_api(
         cls, api: API, region: str, connected_realm_id: str
     ) -> "AuctionsResponse":
-        resp = api.get_auctions(region, connected_realm_id)
+        resp = api.pull_auctions(region, connected_realm_id)
         return cls.parse_obj(resp)
 
 
@@ -296,7 +295,7 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
 
     @classmethod
     def from_api(cls, api: API, region: str) -> "CommoditiesResponse":
-        resp = api.get_commodities(region)
+        resp = api.pull_commodities(region)
         return cls.parse_obj(resp)
 
     def get_timestamp(self) -> int:
