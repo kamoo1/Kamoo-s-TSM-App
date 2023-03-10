@@ -5,9 +5,8 @@ import argparse
 from ah import config
 from ah.task_manager import TaskManager
 from ah.api import API
+from ah.db import AuctionDB
 from ah.cache import Cache
-from ah.tsm_exporter import TSMExporter
-from ah.storage import TextFile
 
 
 def main(
@@ -25,12 +24,8 @@ def main(
             config.BN_CLIENT_SECRET,
             cache,
         )
-    task_manager = TaskManager(
-        api,
-        db_path,
-        data_use_compression=compress_db,
-        records_expires_in=config.MARKET_VALUE_RECORD_EXPIRES,
-    )
+    db = AuctionDB(db_path, config.MARKET_VALUE_RECORD_EXPIRES, compress_db)
+    task_manager = TaskManager(api, db)
     task_manager.update_dbs_under_region(region)
 
 
