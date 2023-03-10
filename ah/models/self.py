@@ -85,7 +85,8 @@ class MarketValueRecord(_BaseModel):
 
 
 class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel):
-
+    # TODO: we can compress old records to a lower granularity, 1 record per day
+    #       for example, to save some space.
     # TODO: figure out if we want to return 0 and update the return type,
     #       maybe add warning logs when there are no records.
     """
@@ -339,10 +340,10 @@ class ItemString(_BaseModel):
 
     @classmethod
     def from_auction_item(cls, item: AuctionItem) -> "ItemString":
-        if item.pet_breed_id is not None:
+        if item.pet_species_id is not None:
             return cls(
                 type=ItemStringTypeEnum.PET,
-                id=item.pet_breed_id,
+                id=item.pet_species_id,
                 bonuses=None,
                 mods=None,
             )
@@ -587,7 +588,6 @@ class MapItemStringMarketValueRecord(
     def from_response(
         cls,
         response: GenericAuctionsResponseInterface,
-        response_timestamp: int,
     ) -> "MapItemStringMarketValueRecord":
 
         obj = cls()
@@ -615,7 +615,7 @@ class MapItemStringMarketValueRecord(
             )
             if market_value:
                 obj[item_string] = MarketValueRecord(
-                    timestamp=response_timestamp,
+                    timestamp=response.get_timestamp(),
                     market_value=market_value,
                     num_auctions=temp[item_string][0],
                     min_buyout=min_buyout,

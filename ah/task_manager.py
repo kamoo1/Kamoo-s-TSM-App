@@ -1,8 +1,6 @@
 import re
 import os
 import time
-import datetime
-import zoneinfo
 from logging import getLogger
 from typing import Optional
 
@@ -135,7 +133,12 @@ class TaskManager:
                 ret["timezone"] = realm["timezone"]
 
             ret["realms"].append(
-                {"id": realm["id"], "name": realm["name"], "slug": realm["slug"]}
+                {
+                    "id": realm["id"],
+                    "name": realm["name"],
+                    "slug": realm["slug"],
+                    "locale": realm["locale"],
+                }
             )
 
         return ret
@@ -180,7 +183,7 @@ class TaskManager:
                 self._logger.error(f"Failed to request commodities for {region}: {e}")
                 return
 
-        increment = MapItemStringMarketValueRecord.from_response(resp, resp.timestamp)
+        increment = MapItemStringMarketValueRecord.from_response(resp)
         return increment
 
     def update_db(
@@ -228,86 +231,17 @@ class TaskManager:
     def update_dbs_under_region(
         self,
         region: str,
-        exporter: TSMExporter = None,
-        export_file: TextFile = None,
     ) -> None:
-        if not all([exporter, export_file]) and any([exporter, export_file]):
-            raise ValueError(
-                "either both or none of exporter and export_file should be given"
-            )
-        # ponder on the ramifications.
-        region_data = MapItemStringMarketValueRecords()
         crids = self._pull_connected_realms_ids(region)
         ts_update_begin = int(time.time())
-        # realms = self._pull_connected_realms(region)
-        # print(realms)
-        if exporter:
-            crid_map = self._pull_connected_realms(region)
-            export_file.remove()
-        else:
-            crid_map = None
 
         for crid in crids:
             increment = self.pull_increment(region, crid)
             if increment:
                 file = self.get_db_file(region, crid=crid)
-                auctions_data = self.update_db(file, increment, ts_update_begin)
-                ts_update_end = int(time.time())
-                region_data.extend(auctions_data)
-                realms = []
-                realms.append(str(crid))
-                for realm in crid_map[crid]["realms"]:
-                    realm_name = realm["name"]
-                    if "," in realm_name or '"' in realm_name:
-                        self._logger.error(
-                            f"Realm name {realm_name} contains invalid characters, "
-                            "ignored."
-                        )
-                        continue
-                    realms.append(realm["name"])
-                realm_str = ",".join(realms)
-                if exporter:
-                    for export_realm in self.REALM_EXPORTS:
-                        exporter.append_to_file(
-                            export_file,
-                            auctions_data,
-                            export_realm["fields"],
-                            export_realm["type"],
-                            realm_str,
-                            ts_update_begin,
-                            ts_update_end,
-                        )
+                self.update_db(file, increment, ts_update_begin)
 
         increment = self.pull_increment(region)
         if increment:
             file = self.get_db_file(region)
-            commodities_data = self.update_db(file, increment, ts_update_begin)
-            ts_update_end = int(time.time())
-            region_data.extend(commodities_data)
-
-            if exporter:
-                exporter.append_to_file(
-                    export_file,
-                    commodities_data,
-                    self.COMMODITIES_EXPORT["fields"],
-                    self.COMMODITIES_EXPORT["type"],
-                    region.upper(),
-                    ts_update_begin,
-                    ts_update_end,
-                )
-
-        if exporter and region_data:
-            for export_region in self.REGION_EXPORTS:
-                exporter.append_to_file(
-                    export_file,
-                    region_data,
-                    export_region["fields"],
-                    export_region["type"],
-                    region.upper(),
-                    ts_update_begin,
-                    ts_update_end,
-                )
-
-    # @classmethod
-    # def get_date_from_timestamp(cls, timestamp, zone):
-    #     return datetime.fromtimestamp(timestamp, zone).date()
+            self.update_db(file, increment, ts_update_begin)

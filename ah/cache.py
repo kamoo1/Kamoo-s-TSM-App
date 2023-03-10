@@ -9,6 +9,7 @@ import pickle
 import hashlib
 from typing import Callable
 from logging import getLogger
+from functools import wraps
 
 from ah.fs import ensure_path, remove_path
 
@@ -83,6 +84,7 @@ def bound_json_cache(expires: int):
     """
 
     def wrapper(func: Callable):
+        @wraps(func)
         def inner(that: BoundCacheMixin, *args, **kwargs):
             # hash function should be SHA-256
             obj = pickle.dumps({"fname": func.__name__, "args": args, "kwargs": kwargs})
