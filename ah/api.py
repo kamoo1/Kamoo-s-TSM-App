@@ -6,6 +6,12 @@ from ah.vendors.blizzardapi import BlizzardApi
 from ah.cache import bound_cache, BoundCacheMixin, Cache
 from ah.defs import SECONDS_IN
 
+__all__ = (
+    "BNAPIWrapper",
+    "BNAPI",
+    "GHAPI",
+)
+
 
 class BNAPIWrapper(BoundCacheMixin):
     def __init__(self, client_id, client_secret, cache: Cache, *args, **kwargs) -> None:
@@ -164,7 +170,7 @@ class GHAPI(BoundCacheMixin):
 
         return ret
 
-    @bound_cache(SECONDS_IN.HOUR, is_json=False)
+    @bound_cache(SECONDS_IN.HOUR)
     def get_asset(self, url) -> bytes:
         resp = requests.get(url)
         if resp.status_code != 200:

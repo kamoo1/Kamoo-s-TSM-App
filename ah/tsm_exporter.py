@@ -260,7 +260,8 @@ def main(
     cache: Cache = None,
 ):
     if cache is None:
-        cache = Cache(config.TEMP_PATH, config.APP_NAME)
+        cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME)
+        cache = Cache(cache_path)
 
     if bn_api is None:
         bn_api = BNAPI(

@@ -3,14 +3,15 @@ import os
 import json
 import logging
 
-import requests
 
 from ah.api import GHAPI
 from ah.storage import BinaryFile, TextFile, BaseFile
 from ah.models import MapItemStringMarketValueRecords, MapItemStringMarketValueRecord
 from ah.defs import SECONDS_IN
-from typing import Dict
+from typing import Dict, Optional, Any
 from ah import config
+
+__all__ = ("AuctionDB",)
 
 
 class AuctionDB:
@@ -19,13 +20,15 @@ class AuctionDB:
     FN_META = "meta-{region}.json"
     MIN_RECORDS_EXPIRES_IN = 60 * SECONDS_IN.DAY
     DEFAULT_USE_COMPRESSION = True
-    REPO_MATCHER = re.compile(r"github.com/(?P<user>[^/]+)/(?P<repo>[^/]+)")
-    # create new if not exist
-    MODE_LOCAL_RW = "local"
-    # fork from repo if not exist
-    MODE_LOCAL_REMOTE_RW = "local_remote"
-    # read only from repo
-    MODE_REMOTE_R = "remote"
+    REPO_MATCHER = re.compile(
+        r"^(:?https://)?github.com/(?P<user>[^/]+)/(?P<repo>[^/]+).*$"
+    )
+    # local mode
+    MODE_LOCAL_RW = "MODE_LOCAL_RW"
+    # fork from repo if not exist, then local mode
+    MODE_LOCAL_REMOTE_RW = "MODE_LOCAL_REMOTE_RW"
+    # read only from remote
+    MODE_REMOTE_R = "MODE_REMOTE_R"
 
     def __init__(
         self,
@@ -40,13 +43,22 @@ class AuctionDB:
             raise ValueError(
                 f"records_expires_in must be at least {self.MIN_RECORDS_EXPIRES_IN}"
             )
-        if mode not in (self.MODE_LOCAL_RW, self.MODE_REMOTE_R):
+        if mode not in (
+            self.MODE_LOCAL_RW,
+            self.MODE_LOCAL_REMOTE_RW,
+            self.MODE_REMOTE_R,
+        ):
             raise ValueError(f"Invalid mode: {mode}")
 
-        if mode == self.MODE_REMOTE_R and not (fork_repo and gh_api):
-            raise ValueError(
-                f"fork_repo and gh_api must be provided when mode is {self.MODE_REMOTE_R}"
-            )
+        if mode in (self.MODE_LOCAL_REMOTE_RW, self.MODE_REMOTE_R):
+            if not (fork_repo and gh_api):
+                # verify fork_repo with REPO_MATCHER
+                raise ValueError(
+                    f"fork_repo and gh_api must be provided when mode is {mode}"
+                )
+
+            if not self.validate_repo(fork_repo):
+                raise ValueError(f"Invalid fork_repo: {fork_repo}")
 
         self._logger = logging.getLogger(self.__class__.__name__)
         self.data_path = data_path
@@ -55,6 +67,10 @@ class AuctionDB:
         self.mode = mode
         self.fork_repo = fork_repo
         self.gh_api = gh_api
+
+    @classmethod
+    def validate_repo(cls, repo: str) -> Optional[re.Match]:
+        return cls.REPO_MATCHER.match(repo)
 
     def update_db(
         self, file: BinaryFile, increment: MapItemStringMarketValueRecord, ts_now: int
@@ -78,7 +94,7 @@ class AuctionDB:
 
     def pull_assets_url(self) -> Dict[str, str]:
         # get repo owner, repo name
-        m = self.REPO_MATCHER.match(self.fork_repo)
+        m = self.validate_repo(self.fork_repo)
         if not m:
             raise ValueError(f"Invalid fork_repo: {self.fork_repo}")
         user = m.group("user")
@@ -92,7 +108,7 @@ class AuctionDB:
     def fork_file(self, file: BaseFile) -> None:
         assets = self.pull_assets_url()
         if file.file_name not in assets:
-            raise ValueError(f"File not found in assets: {file.file_name}")
+            raise FileNotFoundError(f"File not found in assets: {file.file_name}")
         asset_url = assets[file.file_name]
         self._logger.info(f"Downloading {file.file_name} from {asset_url}")
         asset_data = self.pull_asset(asset_url)
@@ -100,18 +116,7 @@ class AuctionDB:
             f.write(asset_data)
 
     def load_db(self, file: BinaryFile) -> "MapItemStringMarketValueRecords":
-        if (
-            self.mode == self.MODE_REMOTE_R
-            or self.mode == self.MODE_LOCAL_REMOTE_RW
-            and not file.exists()
-        ):
-            try:
-                self.fork_file(file)
-            except Exception as e:
-                self._logger.error(
-                    f"Failed to download db file from {self.fork_repo}: {e}"
-                )
-
+        self.ensure_file(file)
         if file.exists():
             db = MapItemStringMarketValueRecords.from_file(file)
         else:
@@ -125,7 +130,7 @@ class AuctionDB:
         if both region and crid given, get auctions file
         """
         fn_suffix = "gz" if self.use_compression else "bin"
-        if region and crid:
+        if region and crid is not None:
             fn = self.FN_CRID_AUCTIONS.format(
                 region=region, crid=crid, suffix=fn_suffix
             )
@@ -145,12 +150,27 @@ class AuctionDB:
         file = TextFile(file_path)
         return file
 
-    def load_meta(self, file: TextFile):
+    def ensure_file(self, file: BaseFile) -> None:
+        if (
+            self.mode == self.MODE_REMOTE_R
+            or self.mode == self.MODE_LOCAL_REMOTE_RW
+            and not file.exists()
+        ):
+            try:
+                self.fork_file(file)
+            except Exception:
+                self._logger.exception(
+                    f"Failed to download {file.file_name} from {self.fork_repo}"
+                )
+
+    def load_meta(self, file: TextFile) -> Dict[str, Any]:
+        self.ensure_file(file)
         if file.exists():
             with file.open("r") as f:
                 meta = json.load(f)
         else:
             meta = {}
+
         return meta
 
     def update_meta(
@@ -159,6 +179,9 @@ class AuctionDB:
         start_ts,
         end_ts,
     ) -> None:
+        if self.mode == self.MODE_REMOTE_R:
+            raise ValueError(f"Invalid mode for update_meta: {self.mode}")
+
         meta = {
             "start_ts": start_ts,
             "end_ts": end_ts,

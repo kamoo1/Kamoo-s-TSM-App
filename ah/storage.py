@@ -1,36 +1,7 @@
 import os
-import json
 from gzip import GzipFile
 
-from ah import config
-from ah.fs import get_temp_path, ensure_path, remove_path, remove_file
-
-# TODO: cache isn't using storage class, jsonstorage is orphaned
-
-
-class JSONLStorage(object):
-    def __init__(self) -> None:
-        self._path = get_temp_path("{}.storage".format(config.APP_NAME))
-        ensure_path(self._path)
-
-    def get_file_path_of_table(self, name):
-        return os.path.join(self._path, f"{name}.jsonl")
-
-    def load_table(self, name):
-        path = self.get_file_path_of_table(name)
-        if not os.path.exists(path):
-            return None
-
-        with open(path, "r") as f:
-            return json.load(f)
-
-    def save_table(self, name, data):
-        path = self.get_file_path_of_table(name)
-        with open(path, "w") as f:
-            json.dump(data, f)
-
-    def purge(self):
-        remove_path(self._path)
+from ah.fs import ensure_path, remove_file
 
 
 class BaseFile:

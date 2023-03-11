@@ -1,3 +1,4 @@
+import os
 import sys
 import logging
 import argparse
@@ -18,7 +19,8 @@ def main(
 ):
     if bn_api is None:
         if cache is None:
-            cache = Cache(config.TEMP_PATH, config.APP_NAME)
+            cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME)
+            cache = Cache(cache_path)
         bn_api = BNAPI(
             config.BN_CLIENT_ID,
             config.BN_CLIENT_SECRET,

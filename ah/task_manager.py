@@ -27,16 +27,16 @@ class TaskManager:
         if crid:
             try:
                 resp = AuctionsResponse.from_api(self.bn_api, region, crid)
-            except Exception as e:
-                self._logger.error(
-                    f"Failed to request auctions for {region}-{crid}: {e}"
+            except Exception:
+                self._logger.exception(
+                    f"Failed to request auctions for {region}-{crid}"
                 )
                 return
         else:
             try:
                 resp = CommoditiesResponse.from_api(self.bn_api, region)
-            except Exception as e:
-                self._logger.error(f"Failed to request commodities for {region}: {e}")
+            except Exception:
+                self._logger.exception(f"Failed to request commodities for {region}")
                 return
 
         increment = MapItemStringMarketValueRecord.from_response(resp)
