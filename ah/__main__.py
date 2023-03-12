@@ -1,31 +1,34 @@
+import os
 import sys
 import logging
 import argparse
 
 from ah import config
 from ah.task_manager import TaskManager
-from ah.api import API
+from ah.api import BNAPI
 from ah.db import AuctionDB
 from ah.cache import Cache
+from ah.models import Region
 
 
 def main(
     db_path: str = None,
     compress_db: bool = None,
-    region: str = None,
+    region: Region = None,
     cache: Cache = None,
-    api: API = None,
+    bn_api: BNAPI = None,
 ):
-    if api is None:
+    if bn_api is None:
         if cache is None:
-            cache = Cache(config.TEMP_PATH, config.APP_NAME)
-        api = API(
+            cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME + "_cache")
+            cache = Cache(cache_path)
+        bn_api = BNAPI(
             config.BN_CLIENT_ID,
             config.BN_CLIENT_SECRET,
             cache,
         )
     db = AuctionDB(db_path, config.MARKET_VALUE_RECORD_EXPIRES, compress_db)
-    task_manager = TaskManager(api, db)
+    task_manager = TaskManager(bn_api, db)
     task_manager.update_dbs_under_region(region)
 
 
@@ -40,7 +43,7 @@ def parse_args(raw_args):
         default=False,
         action="store_true",
     )
-    parser.add_argument("region", help="Region to export", choices=config.REGIONS)
+    parser.add_argument("region", help="Region to export", type=Region)
     args = parser.parse_args(raw_args)
     return args
 

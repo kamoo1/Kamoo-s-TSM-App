@@ -230,3 +230,40 @@ class TestModels(TestCase):
                 self.assertEqual(len(recs), 1)
             else:
                 self.assertEqual(len(recs), 3)
+
+    def test_query(self):
+        increment = MapItemStringMarketValueRecord(
+            __root__={
+                ItemString(
+                    type=ItemStringTypeEnum.ITEM,
+                    id=i,
+                    bonuses=(j,),
+                    mods=None,
+                ): MarketValueRecord(
+                    timestamp=1,
+                    market_value=100,
+                    num_auctions=100,
+                    min_buyout=1,
+                )
+                for i in range(10)
+                for j in range(10)
+            }
+        )
+        db = MapItemStringMarketValueRecords()
+        db.update_increment(increment)
+        for i in range(10):
+            db_ = db.query(i)
+            self.assertEqual(len(db_), 10)
+            for item, recs in db_.items():
+                self.assertEqual(item.id, i)
+                self.assertEqual(len(recs), 1)
+
+        # update all market_value in db_ to 200
+        for recs in db_.values():
+            for rec in recs:
+                rec.market_value = 200
+
+        # assert db is not affected
+        for recs in db.values():
+            for rec in recs:
+                self.assertEqual(rec.market_value, 100)

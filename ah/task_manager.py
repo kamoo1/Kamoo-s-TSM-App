@@ -2,11 +2,12 @@ import time
 from logging import getLogger
 from typing import Optional
 
-from ah.api import API
+from ah.api import BNAPI
 from ah.models import (
     AuctionsResponse,
     CommoditiesResponse,
     MapItemStringMarketValueRecord,
+    Region,
 )
 from ah.db import AuctionDB
 
@@ -14,37 +15,37 @@ from ah.db import AuctionDB
 class TaskManager:
     def __init__(
         self,
-        api: API,
+        bn_api: BNAPI,
         db: AuctionDB,
     ) -> None:
         self._logger = getLogger(self.__class__.__name__)
-        self.api = api
+        self.bn_api = bn_api
         self.db = db
 
     def pull_increment(
-        self, region: str, crid: int = None
+        self, region: Region, crid: int = None
     ) -> Optional[MapItemStringMarketValueRecord]:
         if crid:
             try:
-                resp = AuctionsResponse.from_api(self.api, region, crid)
-            except Exception as e:
-                self._logger.error(
-                    f"Failed to request auctions for {region}-{crid}: {e}"
+                resp = AuctionsResponse.from_api(self.bn_api, region, crid)
+            except Exception:
+                self._logger.exception(
+                    f"Failed to request auctions for {region}-{crid}"
                 )
                 return
         else:
             try:
-                resp = CommoditiesResponse.from_api(self.api, region)
-            except Exception as e:
-                self._logger.error(f"Failed to request commodities for {region}: {e}")
+                resp = CommoditiesResponse.from_api(self.bn_api, region)
+            except Exception:
+                self._logger.exception(f"Failed to request commodities for {region}")
                 return
 
         increment = MapItemStringMarketValueRecord.from_response(resp)
         return increment
 
-    def update_dbs_under_region(self, region: str) -> int:
+    def update_dbs_under_region(self, region: Region) -> int:
         begin_ts = int(time.time())
-        crids = self.api.pull_connected_realms_ids(region)
+        crids = self.bn_api.pull_connected_realms_ids(region)
         for crid in crids:
             increment = self.pull_increment(region, crid)
             if increment:

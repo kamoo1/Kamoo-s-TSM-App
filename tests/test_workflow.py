@@ -11,7 +11,7 @@ from ah.models import (
     ItemString,
     ItemStringTypeEnum,
 )
-from ah.api import API
+from ah.api import BNAPI
 from ah.db import AuctionDB
 from ah.__main__ import main, parse_args
 
@@ -139,7 +139,7 @@ class TestWorkflow(TestCase):
         item_id = "123"
         region = "us"
         task_manager = TaskManager(
-            API(wrapper=DummyAPIWrapper()),
+            BNAPI(wrapper=DummyAPIWrapper()),
             AuctionDB(temp_path)
         )
         file = task_manager.db.get_db_file(region)
@@ -196,7 +196,7 @@ class TestWorkflow(TestCase):
         temp = TemporaryDirectory()
         db = AuctionDB(temp.name)
         task_manager = TaskManager(
-            API(wrapper=DummyAPIWrapper()),
+            BNAPI(wrapper=DummyAPIWrapper()),
             db,
         )
         with temp:
@@ -260,14 +260,14 @@ class TestWorkflow(TestCase):
         region = "us"
         db_path = f"{temp.name}/db"
         compress_db = True
-        api = API(wrapper=DummyAPIWrapper())
+        bn_api = BNAPI(wrapper=DummyAPIWrapper())
         with temp:
             main(
                 db_path,
                 compress_db,
                 region,
                 None,
-                api,
+                bn_api,
             )
             # get all files under db_path
             files = sorted(os.listdir(db_path))

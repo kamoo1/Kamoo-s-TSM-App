@@ -6,9 +6,10 @@ from typing import List, Iterator, Literal, Union, Any, Dict, Optional
 from pydantic import Field, root_validator
 
 from ah.models.base import _BaseModel
-from ah.api import API
+from ah.api import BNAPI
 
 __all__ = (
+    "Region",
     "TimeLeft",
     "GenericItemInterface",
     "GenericAuctionInterface",
@@ -20,6 +21,17 @@ __all__ = (
     "Commodity",
     "CommoditiesResponse",
 )
+
+
+class Region(str, Enum):
+    US = "us"
+    EU = "eu"
+    KR = "kr"
+    TW = "tw"
+
+    @classmethod
+    def get_regex(cls) -> str:
+        return "|".join([r for r in cls])
 
 
 class TimeLeft(str, Enum):
@@ -84,7 +96,7 @@ class GenericAuctionsResponseInterface(abc.ABC):
     @abc.abstractclassmethod
     def from_api(
         self,
-        api: API,
+        api: BNAPI,
     ) -> "GenericAuctionsResponseInterface":
         raise NotImplementedError
 
@@ -218,9 +230,9 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
 
     @classmethod
     def from_api(
-        cls, api: API, region: str, connected_realm_id: str
+        cls, bn_api: BNAPI, region: Region, connected_realm_id: str
     ) -> "AuctionsResponse":
-        resp = api.pull_auctions(region, connected_realm_id)
+        resp = bn_api.pull_auctions(region, connected_realm_id)
         return cls.parse_obj(resp)
 
 
@@ -294,8 +306,8 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
         return self.auctions
 
     @classmethod
-    def from_api(cls, api: API, region: str) -> "CommoditiesResponse":
-        resp = api.pull_commodities(region)
+    def from_api(cls, bn_api: BNAPI, region: Region) -> "CommoditiesResponse":
+        resp = bn_api.pull_commodities(region)
         return cls.parse_obj(resp)
 
     def get_timestamp(self) -> int:

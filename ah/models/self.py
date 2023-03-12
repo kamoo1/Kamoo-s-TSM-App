@@ -6,7 +6,7 @@ from functools import total_ordering
 from typing import List, Dict, ClassVar, Generator, Tuple, Optional, Union, Iterable
 
 import numpy as np
-from pydantic import Field, validator
+from pydantic import Field, validator, PrivateAttr
 
 from ah.protobuf.item_db_pb2 import (
     ItemDB,
@@ -321,7 +321,7 @@ class ItemString(_BaseModel):
       `AuctionItem` as their `id` field.
     """
 
-    type: str
+    type: ItemStringTypeEnum
     id: int
     bonuses: Optional[Tuple[int, ...]] = Field(...)
     # used to be kv pairs, cast to even-length tuple for easy hashing
@@ -637,6 +637,41 @@ class MapItemStringMarketValueRecords(
     __root__: Dict[ItemString, MarketValueRecords] = Field(
         default_factory=partial(defaultdict, MarketValueRecords)
     )
+    _item_id_map: Dict[int, ItemString] = PrivateAttr(
+        default_factory=partial(defaultdict, list)
+    )
+    _pet_id_map: Dict[int, ItemString] = PrivateAttr(
+        default_factory=partial(defaultdict, list)
+    )
+    _indexed: bool = PrivateAttr(False)
+
+    def _init_id_maps(self) -> None:
+        """build indexes on top of item_string for the need of querying
+        by numeric id
+        """
+        if self._indexed:
+            return
+        for item_string in self.keys():
+            if item_string.type == ItemStringTypeEnum.ITEM:
+                self._item_id_map[item_string.id].append(item_string)
+            elif item_string.type == ItemStringTypeEnum.PET:
+                self._pet_id_map[item_string.id].append(item_string)
+
+        self._indexed = True
+
+    # todo add from_str to item_string so we can indexing easily here
+    def query(self, id_: int) -> "MapItemStringMarketValueRecords":
+        self._init_id_maps()
+        result = MapItemStringMarketValueRecords()
+        if id_ in self._item_id_map and self._item_id_map[id_]:
+            for item_string in self._item_id_map[id_]:
+                result[item_string] = self[item_string].copy(deep=True)
+
+        if id_ in self._pet_id_map and self._pet_id_map[id_]:
+            for item_string in self._pet_id_map[id_]:
+                result[item_string] = self[item_string].copy(deep=True)
+
+        return result
 
     def extend(
         self, other: "MapItemStringMarketValueRecords", sort: bool = False
@@ -742,6 +777,8 @@ class MapItemStringMarketValueRecords(
                 pb_item_mv_record = pb_item.market_value_records.add()
                 pb_item_mv_record.timestamp = mv_record.timestamp
                 pb_item_mv_record.market_value = mv_record.market_value
+                pb_item_mv_record.num_auctions = mv_record.num_auctions
+                pb_item_mv_record.min_buyout = mv_record.min_buyout
 
         return pb_item_db
 
