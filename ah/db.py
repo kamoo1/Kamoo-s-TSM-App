@@ -2,11 +2,16 @@ import re
 import os
 import json
 import logging
+from functools import singledispatchmethod
 
 
 from ah.api import GHAPI
 from ah.storage import BinaryFile, TextFile, BaseFile
-from ah.models import MapItemStringMarketValueRecords, MapItemStringMarketValueRecord
+from ah.models import (
+    MapItemStringMarketValueRecords,
+    MapItemStringMarketValueRecord,
+    Region,
+)
 from ah.defs import SECONDS_IN
 from typing import Dict, Optional, Any
 from ah import config
@@ -17,11 +22,17 @@ __all__ = ("AuctionDB",)
 class AuctionDB:
     FN_REGION_COMMODITIES = "{region}-commodities.{suffix}"
     FN_CRID_AUCTIONS = "{region}-{crid}-auctions.{suffix}"
+    FN_SUFFIX_GZ = "gz"
+    FN_SUFFIX_BIN = "bin"
     FN_META = "meta-{region}.json"
     MIN_RECORDS_EXPIRES_IN = 60 * SECONDS_IN.DAY
     DEFAULT_USE_COMPRESSION = True
     REPO_MATCHER = re.compile(
         r"^(:?https://)?github.com/(?P<user>[^/]+)/(?P<repo>[^/]+).*$"
+    )
+    __region_regex = Region.get_regex()
+    DB_FILE_MATCHER = re.compile(
+        rf"^(?:{__region_regex})-(?:\d+-auctions|commodities)\.(?:gz|bin)$"
     )
     # local mode
     MODE_LOCAL_RW = "MODE_LOCAL_RW"
@@ -72,6 +83,21 @@ class AuctionDB:
     def validate_repo(cls, repo: str) -> Optional[re.Match]:
         return cls.REPO_MATCHER.match(repo)
 
+    @singledispatchmethod
+    @classmethod
+    def validate_db_name(cls, arg) -> Optional[re.Match]:
+        raise NotImplementedError(f"Invalid arg type: {type(arg)}")
+
+    @validate_db_name.register
+    @classmethod
+    def _(cls, file: BaseFile) -> Optional[re.Match]:
+        return cls.DB_FILE_MATCHER.match(file.file_name)
+
+    @validate_db_name.register
+    @classmethod
+    def _(cls, file_name: str) -> Optional[re.Match]:
+        return cls.DB_FILE_MATCHER.match(file_name)
+
     def update_db(
         self, file: BinaryFile, increment: MapItemStringMarketValueRecord, ts_now: int
     ) -> "MapItemStringMarketValueRecords":
@@ -112,10 +138,25 @@ class AuctionDB:
         asset_url = assets[file.file_name]
         self._logger.info(f"Downloading {file.file_name} from {asset_url}")
         asset_data = self.pull_asset(asset_url)
+
+        # we don't want it to be compressed multiple times
+        # since we're essentially doing a copy here.
+        if hasattr(file, "use_compression"):
+            original_use_compression = file.use_compression
+            file.use_compression = False
+
         with file.open("wb") as f:
             f.write(asset_data)
 
-    def load_db(self, file: BinaryFile) -> "MapItemStringMarketValueRecords":
+        if hasattr(file, "use_compression"):
+            file.use_compression = original_use_compression
+
+    @singledispatchmethod
+    def load_db(self, file) -> "MapItemStringMarketValueRecords":
+        raise NotImplementedError(f"load_db not implemented for {type(file)}")
+
+    @load_db.register
+    def _(self, file: BinaryFile) -> "MapItemStringMarketValueRecords":
         self.ensure_file(file)
         if file.exists():
             db = MapItemStringMarketValueRecords.from_file(file)
@@ -124,12 +165,30 @@ class AuctionDB:
 
         return db
 
-    def get_db_file(self, region: str, crid: int = None) -> BinaryFile:
+    @load_db.register
+    def _(self, file_name: str) -> "MapItemStringMarketValueRecords":
+        if file_name.endswith(self.FN_SUFFIX_GZ):
+            use_compression = True
+        else:
+            use_compression = False
+
+        file = BinaryFile(
+            os.path.join(self.data_path, file_name),
+            use_compression=use_compression,
+        )
+        return self.load_db(file)
+
+    def list_db_name(self):
+        candidates = os.listdir(self.data_path)
+        db_names = [fn for fn in candidates if self.validate_db_name(fn)]
+        return db_names
+
+    def get_db_file(self, region: Region, crid: int = None) -> BinaryFile:
         """
         if only region given, get commodities file
         if both region and crid given, get auctions file
         """
-        fn_suffix = "gz" if self.use_compression else "bin"
+        fn_suffix = self.FN_SUFFIX_GZ if self.use_compression else self.FN_SUFFIX_BIN
         if region and crid is not None:
             fn = self.FN_CRID_AUCTIONS.format(
                 region=region, crid=crid, suffix=fn_suffix
@@ -144,7 +203,7 @@ class AuctionDB:
         file = BinaryFile(file_path, use_compression=self.use_compression)
         return file
 
-    def get_meta_file(self, region: str) -> TextFile:
+    def get_meta_file(self, region: Region) -> TextFile:
         fn = self.FN_META.format(region=region)
         file_path = os.path.join(self.data_path, fn)
         file = TextFile(file_path)

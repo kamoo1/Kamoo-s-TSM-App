@@ -1,6 +1,7 @@
 from unittest import TestCase
 import tempfile
 import json
+import gzip
 
 from ah.db import AuctionDB
 from ah.models import (
@@ -46,6 +47,7 @@ class DummyGHAPI:
                     ),
                 )
         self.db_bytes = db.to_protobuf_bytes()
+        self.db_bytes = gzip.compress(self.db_bytes)
 
     def get_assets_uri(self, owner, repo):
         ret = {}
@@ -360,3 +362,76 @@ class TestAuctionDB(TestCase):
         )
         pick_map = db.load_db(pick_file)
         self.assertEqual(len(pick_map), 1)
+
+    def test_load_db(self):
+        mode = AuctionDB.MODE_REMOTE_R
+        db_path = self.tmp_dir.name
+        expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
+        compress = True
+        fork_repo = "github.com/user/repo"
+
+        site = "https://example.com"
+        region = "us"
+        n_crid = n_item = n_record_per_item = 2
+        ts_base = 1000
+        gh_api = DummyGHAPI(site, region, n_crid, n_item, n_record_per_item, ts_base)
+
+        db = AuctionDB(
+            db_path,
+            expires,
+            compress,
+            mode,
+            fork_repo=fork_repo,
+            gh_api=gh_api,
+        )
+        self.assert_db(db, region, n_crid, n_item, n_record_per_item)
+
+        pick_crid = n_crid - 1
+        pick_file = db.get_db_file(region, pick_crid)
+        pick_map = db.load_db(pick_file)
+        pick_map_ = db.load_db(pick_file.file_name)
+        self.assertEqual(pick_map.to_protobuf_bytes(), pick_map_.to_protobuf_bytes())
+
+    def test_validate_db_name(self):
+        v = AuctionDB.validate_db_name
+        self.assertFalse(v("us-auctions.gz"))
+        self.assertFalse(v("us-0-auctions.gz "))
+        self.assertFalse(v(" us-0-auctions.gz"))
+        self.assertFalse(v("us-0-auctions.bin.gz"))
+        self.assertTrue(v("us-0-auctions.gz"))
+        self.assertTrue(v("us-0-auctions.bin"))
+
+        self.assertFalse(v("us-0-commodities.gz"))
+        self.assertFalse(v(" us-commodities.gz"))
+        self.assertFalse(v("us-commodities.gz "))
+        self.assertFalse(v("us-commodities.bin.gz"))
+        self.assertTrue(v("us-commodities.gz"))
+        self.assertTrue(v("us-commodities.bin"))
+
+    @classmethod
+    def make_db_file(cls, db, region, crid):
+        db_file = db.get_db_file(region, crid)
+        db_file.touch()
+        return db_file.file_name
+
+    def test_list_db_name(self):
+        mode = AuctionDB.MODE_LOCAL_RW
+        db_path = self.tmp_dir.name
+        expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
+        compress = True
+
+        region = "us"
+        n_crid = 2
+
+        db = AuctionDB(
+            db_path,
+            expires,
+            compress,
+            mode,
+        )
+        expected = set()
+        for crid in range(n_crid):
+            fn = self.make_db_file(db, region, crid)
+            expected.add(fn)
+
+        self.assertEqual(set(db.list_db_name()), expected)

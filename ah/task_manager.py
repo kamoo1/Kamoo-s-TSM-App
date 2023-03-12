@@ -7,6 +7,7 @@ from ah.models import (
     AuctionsResponse,
     CommoditiesResponse,
     MapItemStringMarketValueRecord,
+    Region,
 )
 from ah.db import AuctionDB
 
@@ -22,7 +23,7 @@ class TaskManager:
         self.db = db
 
     def pull_increment(
-        self, region: str, crid: int = None
+        self, region: Region, crid: int = None
     ) -> Optional[MapItemStringMarketValueRecord]:
         if crid:
             try:
@@ -42,7 +43,7 @@ class TaskManager:
         increment = MapItemStringMarketValueRecord.from_response(resp)
         return increment
 
-    def update_dbs_under_region(self, region: str) -> int:
+    def update_dbs_under_region(self, region: Region) -> int:
         begin_ts = int(time.time())
         crids = self.bn_api.pull_connected_realms_ids(region)
         for crid in crids:

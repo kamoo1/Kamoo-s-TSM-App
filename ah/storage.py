@@ -1,12 +1,13 @@
 import os
 from gzip import GzipFile
+import pathlib
 
 from ah.fs import ensure_path, remove_file
 
 
 class BaseFile:
     def __init__(self, file_path: str) -> None:
-        file_path = os.path.normcase(file_path)
+        file_path = os.path.normpath(file_path)
         file_name = os.path.basename(file_path)
         base_path = os.path.dirname(file_path)
         if base_path:
@@ -26,6 +27,9 @@ class BaseFile:
 
     def open(self, mode="rb"):
         raise NotImplementedError
+
+    def touch(self):
+        pathlib.Path(self.file_path).touch()
 
 
 class TextFile(BaseFile):

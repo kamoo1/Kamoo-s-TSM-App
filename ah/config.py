@@ -10,5 +10,4 @@ DEFAULT_DB_PATH = os.path.join(TEMP_PATH, "ah_db")
 DEFAULT_EXPORT_PATH = os.path.join(TEMP_PATH, "ah_export.lua")
 APP_NAME = "ah"
 MARKET_VALUE_RECORD_EXPIRES = 60 * SECONDS_IN.DAY
-REGIONS = ["us", "eu", "kr", "tw"]
 LOGGING_LEVEL = os.environ.get("LOGGING_LEVEL", "INFO")

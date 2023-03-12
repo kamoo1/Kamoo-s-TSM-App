@@ -9,6 +9,7 @@ from ah.models.base import _BaseModel
 from ah.api import BNAPI
 
 __all__ = (
+    "Region",
     "TimeLeft",
     "GenericItemInterface",
     "GenericAuctionInterface",
@@ -20,6 +21,17 @@ __all__ = (
     "Commodity",
     "CommoditiesResponse",
 )
+
+
+class Region(str, Enum):
+    US = "us"
+    EU = "eu"
+    KR = "kr"
+    TW = "tw"
+
+    @classmethod
+    def get_regex(cls) -> str:
+        return "|".join([r for r in cls])
 
 
 class TimeLeft(str, Enum):
@@ -218,7 +230,7 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
 
     @classmethod
     def from_api(
-        cls, bn_api: BNAPI, region: str, connected_realm_id: str
+        cls, bn_api: BNAPI, region: Region, connected_realm_id: str
     ) -> "AuctionsResponse":
         resp = bn_api.pull_auctions(region, connected_realm_id)
         return cls.parse_obj(resp)
@@ -294,7 +306,7 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
         return self.auctions
 
     @classmethod
-    def from_api(cls, bn_api: BNAPI, region: str) -> "CommoditiesResponse":
+    def from_api(cls, bn_api: BNAPI, region: Region) -> "CommoditiesResponse":
         resp = bn_api.pull_commodities(region)
         return cls.parse_obj(resp)
 

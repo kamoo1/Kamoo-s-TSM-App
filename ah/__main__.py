@@ -8,18 +8,19 @@ from ah.task_manager import TaskManager
 from ah.api import BNAPI
 from ah.db import AuctionDB
 from ah.cache import Cache
+from ah.models import Region
 
 
 def main(
     db_path: str = None,
     compress_db: bool = None,
-    region: str = None,
+    region: Region = None,
     cache: Cache = None,
     bn_api: BNAPI = None,
 ):
     if bn_api is None:
         if cache is None:
-            cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME)
+            cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME + "_cache")
             cache = Cache(cache_path)
         bn_api = BNAPI(
             config.BN_CLIENT_ID,
@@ -42,7 +43,7 @@ def parse_args(raw_args):
         default=False,
         action="store_true",
     )
-    parser.add_argument("region", help="Region to export", choices=config.REGIONS)
+    parser.add_argument("region", help="Region to export", type=Region)
     args = parser.parse_args(raw_args)
     return args
 

@@ -5,7 +5,7 @@ import os
 import re
 
 
-from ah.models.self import MapItemStringMarketValueRecords
+from ah.models import MapItemStringMarketValueRecords, Region
 from ah.storage import TextFile
 from ah.db import AuctionDB
 from ah.api import BNAPI, GHAPI
@@ -70,12 +70,10 @@ class TSMExporter:
             ],
         },
     ]
-
-    TEMPLATE = 'select(2, ...).LoadData("{data_type}","{region_or_realm}",[[return {{downloadTime={ts},fields={{{fields}}},data={{{data}}}}}]])'
+    TEMPLATE_ROW = 'select(2, ...).LoadData("{data_type}","{region_or_realm}",[[return {{downloadTime={ts},fields={{{fields}}},data={{{data}}}}}]])'
+    TEMPLATE_APPDATA = 'select(2, ...).LoadData("APP_INFO","Global",[[return {{version={version},lastSync={last_sync},message={{id=0,msg=""}},news={{}}}}]])'
     NUMERIC_SET = set("0123456789")
-    ASSET_MATCHER = re.compile(
-        r"(?:us|eu|tw|kr)-(?:\d+-auctions|commodities)\.(?:gz|bin)"
-    )
+    TSM_VERSION = 41200
     _logger = logging.getLogger("TSMExporter")
 
     def __init__(self, bn_api: BNAPI, db: AuctionDB, export_file: TextFile) -> None:
@@ -97,7 +95,10 @@ class TSMExporter:
         return os.path.normpath(path)
 
     @classmethod
-    def get_tsm_export_path(cls, warcraft_dir: str) -> str:
+    def get_tsm_export_path(cls, warcraft_dir: str = None) -> str:
+        if not warcraft_dir:
+            warcraft_dir = cls.find_warcraft_dir_windows()
+
         return os.path.join(
             warcraft_dir,
             "Interface",
@@ -113,7 +114,7 @@ class TSMExporter:
         )
 
     @classmethod
-    def export_append(
+    def export_append_data(
         cls,
         file: TextFile,
         map_records: MapItemStringMarketValueRecords,
@@ -161,7 +162,7 @@ class TSMExporter:
                     raise ValueError(f"unsupported field {field}.")
 
                 if isinstance(value, int):
-                    value = cls.baseN(value, 26)
+                    value = cls.baseN(value, 32)
                 elif isinstance(value, float):
                     value = str(value)
                 elif isinstance(value, str):
@@ -179,14 +180,14 @@ class TSMExporter:
             items_data.append(item_text)
 
         fields_str = ",".join('"' + field + '"' for field in fields)
-        text_out = cls.TEMPLATE.format(
+        text_out = cls.TEMPLATE_ROW.format(
             data_type=type_,
             region_or_realm=region_or_realm,
             ts=ts_update_begin,
             fields=fields_str,
             data=",".join(items_data),
         )
-        with file.open("a", newline="\n") as f:
+        with file.open("a", newline="\n", encoding="utf-8") as f:
             f.write(text_out + "\n")
 
     def export_region(self, region_name: str, realm_names: Set[str]):
@@ -213,7 +214,7 @@ class TSMExporter:
                     for name in realm_names_export:
                         # realms in same cr group share
                         # the same auction house data
-                        self.export_append(
+                        self.export_append_data(
                             self.export_file,
                             cr_auction_data,
                             export_realm["fields"],
@@ -227,40 +228,54 @@ class TSMExporter:
         region_commodity_data = self.db.load_db(region_commodity_file)
         if region_commodity_data:
             region_data.extend(region_commodity_data)
-            self.export_append(
+            self.export_append_data(
                 self.export_file,
                 region_commodity_data,
-                self.COMMODITY_EXPORT["fields"],
-                self.COMMODITY_EXPORT["type"],
+                self.COMMODITIES_EXPORT["fields"],
+                self.COMMODITIES_EXPORT["type"],
                 region_name.upper(),
                 ts_update_start,
                 ts_update_end,
             )
 
         if region_data:
-            self.export_append(
-                self.export_file,
-                region_data,
-                self.REGION_EXPORT["fields"],
-                self.REGION_EXPORT["type"],
-                region_name.upper(),
-                ts_update_start,
-                ts_update_end,
+            for region_export in self.REGION_EXPORTS:
+                self.export_append_data(
+                    self.export_file,
+                    region_data,
+                    region_export["fields"],
+                    region_export["type"],
+                    region_name.upper(),
+                    ts_update_start,
+                    ts_update_end,
+                )
+
+        self.export_append_app_info(self.export_file, self.TSM_VERSION, ts_update_end)
+
+    @classmethod
+    def export_append_app_info(cls, file: TextFile, version: int, ts_last_sync: int):
+        # mine windows uses cp936, let's be more explicit here
+        # https://docs.python.org/3.10/library/functions.html#open
+        with file.open("a", newline="\n", encoding="utf-8") as f:
+            text_out = cls.TEMPLATE_APPDATA.format(
+                version=version,
+                last_sync=ts_last_sync,
             )
+            f.write(text_out + "\n")
 
 
 def main(
-    repo: str = None,
     db_path: str = None,
     compress_db: bool = None,
-    export_region: str = None,
-    export_realms: List[str] = None,
+    repo: str = None,
+    export_region: Region = None,
+    export_realms: Set[str] = None,
     export_path: str = None,
     bn_api: BNAPI = None,
     cache: Cache = None,
 ):
     if cache is None:
-        cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME)
+        cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME + "_cache")
         cache = Cache(cache_path)
 
     if bn_api is None:
@@ -271,11 +286,17 @@ def main(
         )
 
     gh_api = GHAPI(cache)
+
+    if repo:
+        mode = AuctionDB.MODE_REMOTE_R
+    else:
+        mode = AuctionDB.MODE_LOCAL_RW
+
     db = AuctionDB(
         db_path,
         config.MARKET_VALUE_RECORD_EXPIRES,
         compress_db,
-        AuctionDB.MODE_REMOTE_R,
+        mode,
         repo,
         gh_api,
     )
@@ -285,9 +306,16 @@ def main(
 
     export_file = TextFile(export_path)
     exporter = TSMExporter(bn_api, db, export_file)
+    exporter.export_file.remove()
     exporter.export_region(export_region, export_realms)
 
 
 if __name__ == "__main__":
-    kwargs = {"repo_owner": "kamoo1", "repo_name": "TSM-Backend"}
+    kwargs = {
+        "db_path": "./db",
+        "compress_db": True,
+        "repo": "https://github.com/kamoo1/TSM-Backend",
+        "export_region": "tw",
+        "export_realms": {"日落沼澤"},
+    }
     main(**kwargs)
