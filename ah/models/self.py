@@ -777,6 +777,8 @@ class MapItemStringMarketValueRecords(
                 pb_item_mv_record = pb_item.market_value_records.add()
                 pb_item_mv_record.timestamp = mv_record.timestamp
                 pb_item_mv_record.market_value = mv_record.market_value
+                pb_item_mv_record.num_auctions = mv_record.num_auctions
+                pb_item_mv_record.min_buyout = mv_record.min_buyout
 
         return pb_item_db
 
