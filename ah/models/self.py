@@ -2,8 +2,18 @@ from functools import partial
 from enum import Enum
 from heapq import heappush, heappop
 from collections import defaultdict
-from functools import total_ordering
-from typing import List, Dict, ClassVar, Generator, Tuple, Optional, Union, Iterable
+from functools import total_ordering, lru_cache
+from typing import (
+    List,
+    Dict,
+    ClassVar,
+    Generator,
+    Tuple,
+    Optional,
+    Union,
+    Iterable,
+    Set,
+)
 
 import numpy as np
 from pydantic import Field, validator, PrivateAttr
@@ -22,6 +32,7 @@ from ah.models.blizzard import (
     CommodityItem,
 )
 from ah.defs import SECONDS_IN
+from ah.data import map_bonuses
 
 __all__ = (
     "MarketValueRecord",
@@ -270,37 +281,14 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
             return 0
 
 
-# def bound_cache(func: Callable) -> Callable:
-#     """
-#     Cache the result of a object's method call,
-#     there's shouldn't be any arguments passed to the method.
-
-#     """
-
-#     # we can't really put cache in the object because of pydantic won't allow it
-#     # if only pydantic has it's own cache implementation for frozen models...
-#     cache = {}
-
-#     @wraps(func)
-#     def wrapper(that, *args, **kwargs):
-#         # check no arguments passed
-#         if args or kwargs:
-#             raise ValueError("method should not have any arguments")
-
-#         key = (id(that), func.__name__)
-#         if key in cache:
-#             return cache[key]
-
-#         result = func(that)
-#         cache[key] = result
-#         return result
-
-#     return wrapper
-
-
 class ItemStringTypeEnum(str, Enum):
     PET = "p"
     ITEM = "i"
+
+
+class ILVL_MODIFIERS_TYPES(int, Enum):
+    ABS_ILVL = -1
+    REL_ILVL = -2
 
 
 class ItemString(_BaseModel):
@@ -328,6 +316,15 @@ class ItemString(_BaseModel):
     mods: Optional[Tuple[int, ...]] = Field(...)
 
     KEEPED_MODIFIERS_TYPES: ClassVar[List[int]] = [9, 29, 30]
+    MAP_BONUSES: ClassVar[Dict] = map_bonuses
+    SET_BONUS_ILVL_FIELDS: ClassVar[Set[int]] = {
+        "level",
+        "base_level",
+        "curveId",
+        "points",
+    }
+    MOD_TYPE_PLAYER_LEVEL: ClassVar[int] = 9
+    DEFAULT_PLAYER_LVL: ClassVar[int] = 1
 
     @classmethod
     def from_item(cls, item: GenericItemInterface) -> str:
@@ -350,12 +347,13 @@ class ItemString(_BaseModel):
 
         else:
             if item.bonus_lists:
-                # TODO: confirm there's no filtering for bonus list in TSM
-                bonuses = sorted(item.bonus_lists)
+                # we will not sort bonus ids as for now
+                bonuses = list(filter(cls.MAP_BONUSES.__contains__, item.bonus_lists))
 
             else:
                 bonuses = None
 
+            plvl = None
             heap = []
             if item.modifiers:
                 for mod in item.modifiers:
@@ -363,6 +361,8 @@ class ItemString(_BaseModel):
                     mod_value = mod["value"]
                     if mod_type not in cls.KEEPED_MODIFIERS_TYPES:
                         continue
+                    if mod_type == cls.MOD_TYPE_PLAYER_LEVEL:
+                        plvl = mod_value
                     heappush(heap, (mod_type, mod_value))
                 mods = []
                 while heap:
@@ -372,12 +372,156 @@ class ItemString(_BaseModel):
             else:
                 mods = None
 
-            return cls(
-                type=ItemStringTypeEnum.ITEM,
-                id=item.id,
-                bonuses=tuple(bonuses) if bonuses else None,
-                mods=tuple(mods) if mods else None,
-            )
+            ilvl_info = None
+            try:
+                ilvl_info = cls.get_ilvl(bonuses, plvl)
+            except Exception:
+                cls._logger.exception("Exception raised when calculating ilvl:")
+
+            # TODO: figure out if sort bonuses or not
+            bonuses = sorted(bonuses) if bonuses else None
+
+            if ilvl_info is None:
+                return cls(
+                    type=ItemStringTypeEnum.ITEM,
+                    id=item.id,
+                    bonuses=tuple(bonuses) if bonuses else None,
+                    mods=tuple(mods) if mods else None,
+                )
+            else:
+                # ilvl itemstring don't have bonuses or mods in their .to_str(),
+                # so all leftover bonuses and mods will be discarded.
+                # in order to actually store ilvl, we made up two negative mod keys
+                # as storage but they will never show up in the .to_str() as regular
+                # mods.
+                ilvl, is_relative = ilvl_info
+                if is_relative:
+                    o = cls(
+                        type=ItemStringTypeEnum.ITEM,
+                        id=item.id,
+                        bonuses=None,
+                        mods=(ILVL_MODIFIERS_TYPES.REL_ILVL, ilvl),
+                    )
+
+                else:
+                    o = cls(
+                        type=ItemStringTypeEnum.ITEM,
+                        id=item.id,
+                        bonuses=None,
+                        mods=(ILVL_MODIFIERS_TYPES.ABS_ILVL, ilvl),
+                    )
+
+                return o
+
+    @classmethod
+    def get_ilvl(
+        cls, bonuses: List[int], plvl: Optional[int]
+    ) -> Optional[Tuple[int, bool]]:
+        if not bonuses:
+            return None
+
+        if plvl is None:
+            plvl = cls.DEFAULT_PLAYER_LVL
+        ilvl_rel = None
+        ilvl_base = None
+        # last_curve_info = None
+        last_curve_bid = None
+        for bid in bonuses:
+            binfo = cls.MAP_BONUSES[bid]
+            if "level" in binfo:
+                delta = binfo["level"]
+                ilvl_rel = delta if ilvl_rel is None else ilvl_rel + delta
+
+            elif "base_level" in binfo:
+                ilvl_base = ilvl_base or binfo["base_level"]
+
+            elif "curveId" in binfo:
+                # there might be multiple curves and we need to
+                # sort them, TSM's sorting rule is:
+                # flat1, flat2 -> max(bonus1, bonus2)
+                # curve1, any2 -> max(curve1.bonus, curve2.bonus or inf)
+                # flat, curve-> no sorting
+                #
+                # To clarify:
+                # curve, curve -> keep the one with higher curve id
+                # curve, flat or flat, curve -> keep flat
+                # flat, flat -> keep the one with higher bonus id
+                #
+                # I think we can sort all tyeps of curves by curve id,
+                # TSM ditched the curve id field for flat curves,
+                # therefore it fallback to bonus id instead?
+
+                # TODO: read wowhead tooltip code
+                if last_curve_bid:
+                    # sort by curve id
+                    last_curve_bid = (
+                        last_curve_bid
+                        if cls.MAP_BONUSES[last_curve_bid]["curveId"]
+                        > cls.MAP_BONUSES[bid]["curveId"]
+                        else bid
+                    )
+
+                else:
+                    last_curve_bid = bid
+
+        if not (ilvl_base or ilvl_rel or last_curve_bid):
+            # no ilvl info
+            return None
+
+        elif last_curve_bid is None:
+            if ilvl_base is None:
+                return ilvl_rel, True
+            else:
+                ilvl = ilvl_base if ilvl_rel is None else ilvl_base + ilvl_rel
+                if ilvl < 0:
+                    return None
+                else:
+                    return ilvl, False
+
+        else:
+            # according to TSM's we can simply ignore the base ilvl
+            # and the relative ilvl if there is a curve
+            ilvl = cls.get_ilvl_from_curve(last_curve_bid, plvl)
+            if ilvl is None or ilvl < 0:
+                return None
+            else:
+                return ilvl, False
+
+    @classmethod
+    @lru_cache(1024 * 512)
+    # def get_ilvl_from_curve(cls, curve_points: List[Dict], plvl=DEFAULT_PLAYER_LVL):
+    def get_ilvl_from_curve(cls, bonus_id: int, plvl: int) -> Optional[int]:
+        curve_points = cls.MAP_BONUSES[bonus_id]["points"]
+        # >>> curve_points = [
+        #     # [player_level, item_level]; sorted by player_level
+        #     [1, 10],
+        #     [2, 20],
+        #     ...
+        # ]
+        if not curve_points:
+            raise ValueError("Invalid curve points")
+
+        # assuming it's soreted by player level
+        plvl = max(plvl, curve_points[0][0])
+        plvl = min(plvl, curve_points[-1][0])
+        point1, point2 = None, None
+        for point in curve_points:
+            if point[0] == plvl:
+                return point[1]
+            elif point[0] > plvl:
+                point2 = point
+                break
+            else:
+                point1 = point
+
+        if not point1 or not point2:
+            # I don't think this could ever happen...
+            raise ValueError("Invalid curve points")
+
+        # linear interpolation
+        plvl1, ilvl1 = point1[0], point1[1]
+        plvl2, ilvl2 = point2[0], point2[1]
+        return int((plvl - plvl1) * (ilvl2 - ilvl1) / (plvl2 - plvl1) + ilvl1 + 0.5)
 
     @classmethod
     def from_commodity_item(cls, item: CommodityItem) -> "ItemString":
@@ -422,39 +566,14 @@ class ItemString(_BaseModel):
 
     def to_str(self) -> str:
         # TODO: extensive testing
-        #         """
-        #         # we got pure integer id
-        #         123000
+        if self.mods and self.mods[0] in ILVL_MODIFIERS_TYPES._value2member_map_:
+            ilvl_key = self.mods[0]
+            ilvl_val = self.mods[1]
+            if ilvl_key == ILVL_MODIFIERS_TYPES.ABS_ILVL:
+                return f"{self.type}:{self.id}::i{ilvl_val}"
+            else:
+                return f"{self.type}:{self.id}::{'+' if ilvl_val > 0 else ''}{ilvl_val}"
 
-        #         # this is also accepted by tsm
-        #         i:123000
-
-        #         ---
-        #         # i:$id::$n_bonus:$bonus,
-        #         i:193487
-        #         :
-        #         :2:8805:8841
-
-        #         ---
-        #         # i:$id::$n_bonus:$bonus:$n_mods:$mods
-        #         # mods in [9, 29, 30]
-
-        #         i:201942
-        #         :
-        #         :2:8802:8851
-        #         :2:29:32:30:49
-
-        #         ---
-        #         # I guess we just ignore this case, "i" could be ilv?
-        #         i:173193
-        #         :
-        #         :i87
-
-        #         ----
-        #         ???
-        #         i:201939::+10
-
-        #         """
         if self.bonuses:
             bonus_str = str(len(self.bonuses)) + ":" + ":".join(map(str, self.bonuses))
         else:
@@ -589,36 +708,41 @@ class MapItemStringMarketValueRecord(
         cls,
         response: GenericAuctionsResponseInterface,
     ) -> "MapItemStringMarketValueRecord":
-
         obj = cls()
         # >>> {item_string: [total_quantity, [(price, quantity), ...]]}
         temp = {}
-        min_buyout = None
 
         for auction in response.get_auctions():
             item_string = ItemString.from_item(auction.get_item())
             quantity = auction.get_quantity()
+            # for auction, price = .buyout or .bid; buyout = .buyout
+            # for commodity, price = .buyout; buyout = .buyout
             price = auction.get_price()
             buyout = auction.get_buyout()
-            if buyout is not None and (min_buyout is None or buyout < min_buyout):
-                min_buyout = buyout
 
             if item_string not in temp:
-                temp[item_string] = [0, []]
+                # >>> [total_quantity, min_buyout, [(price, quantity), ...]]
+                temp[item_string] = [0, None, []]
 
             temp[item_string][0] += quantity
-            heappush(temp[item_string][1], (price, quantity))
+            if buyout is not None and (
+                temp[item_string][1] is None or buyout < temp[item_string][1]
+            ):
+                temp[item_string][1] = buyout
+
+            heappush(temp[item_string][2], (price, quantity))
 
         for item_string in temp:
             market_value = cls.calc_market_value(
-                temp[item_string][0], cls._heap_pop_all(temp[item_string][1])
+                temp[item_string][0], cls._heap_pop_all(temp[item_string][2])
             )
             if market_value:
                 obj[item_string] = MarketValueRecord(
                     timestamp=response.get_timestamp(),
                     market_value=market_value,
                     num_auctions=temp[item_string][0],
-                    min_buyout=min_buyout,
+                    # for auctions without buyout, their min_buyout are set 0
+                    min_buyout=temp[item_string][1] or 0,
                 )
 
         return obj
