@@ -1,3 +1,7 @@
+import os
+import sys
+import logging
+import argparse
 import time
 from logging import getLogger
 from typing import Optional, Tuple
@@ -12,6 +16,8 @@ from ah.models import (
     Region,
 )
 from ah.db import AuctionDB
+from ah import config
+from ah.cache import Cache
 
 
 class TaskManager:
@@ -95,3 +101,47 @@ class TaskManager:
         }
         meta_file = self.db.get_meta_file(region)
         self.db.update_meta(meta_file, meta)
+
+
+def main(
+    db_path: str = None,
+    compress_db: bool = None,
+    region: Region = None,
+    cache: Cache = None,
+    bn_api: BNAPI = None,
+):
+    if bn_api is None:
+        if cache is None:
+            cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME + "_cache")
+            cache = Cache(cache_path)
+        bn_api = BNAPI(
+            config.BN_CLIENT_ID,
+            config.BN_CLIENT_SECRET,
+            cache,
+        )
+    db = AuctionDB(db_path, config.MARKET_VALUE_RECORD_EXPIRES, compress_db)
+    task_manager = TaskManager(bn_api, db)
+    start_ts, end_ts = task_manager.update_region_dbs(region)
+    task_manager.update_region_meta(region, start_ts, end_ts)
+
+
+def parse_args(raw_args):
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--db_path", help="Path to database", default=config.TEMP_PATH, type=str
+    )
+    parser.add_argument(
+        "--compress_db",
+        help="Use compression for DB files",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument("region", help="Region to export", type=Region)
+    args = parser.parse_args(raw_args)
+    return args
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=config.LOGGING_LEVEL)
+    args = parse_args(sys.argv[1:])
+    main(**vars(args))

@@ -56,7 +56,7 @@ jobs:
         BN_CLIENT_ID: ${{ secrets.BN_CLIENT_ID }}
         BN_CLIENT_SECRET: ${{ secrets.BN_CLIENT_SECRET }}
       run: >
-        python -m ah
+        python -m ah.updater
         --db_path ${{ env.DB_PATH }}
         ${{ env.FLAG_COMPRESS }}
         ${{ env.REGION }}

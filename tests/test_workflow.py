@@ -3,7 +3,7 @@ from random import shuffle, randint
 from tempfile import TemporaryDirectory
 import os
 
-from ah.task_manager import TaskManager
+from ah.updater import TaskManager
 from ah.models import (
     CommoditiesResponse,
     MapItemStringMarketValueRecords,
@@ -13,7 +13,7 @@ from ah.models import (
 )
 from ah.api import BNAPI
 from ah.db import AuctionDB
-from ah.__main__ import main, parse_args
+from ah.updater import main, parse_args
 
 
 class DummyAPIWrapper:
