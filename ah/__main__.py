@@ -29,7 +29,8 @@ def main(
         )
     db = AuctionDB(db_path, config.MARKET_VALUE_RECORD_EXPIRES, compress_db)
     task_manager = TaskManager(bn_api, db)
-    task_manager.update_dbs_under_region(region)
+    start_ts, end_ts = task_manager.update_region_dbs(region)
+    task_manager.update_region_meta(region, start_ts, end_ts)
 
 
 def parse_args(raw_args):

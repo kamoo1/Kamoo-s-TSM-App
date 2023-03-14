@@ -235,17 +235,11 @@ class AuctionDB:
     def update_meta(
         self,
         file: TextFile,
-        start_ts,
-        end_ts,
+        meta: Dict,
     ) -> None:
         if self.mode == self.MODE_REMOTE_R:
             raise ValueError(f"Invalid mode for update_meta: {self.mode}")
 
-        meta = {
-            "start_ts": start_ts,
-            "end_ts": end_ts,
-            "duration": end_ts - start_ts,
-        }
         content = json.dumps(meta)
         with file.open("w") as f:
             f.write(content)
