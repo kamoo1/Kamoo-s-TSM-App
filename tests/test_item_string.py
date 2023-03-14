@@ -2,14 +2,9 @@ from unittest import TestCase
 import random
 
 from ah.models import (
-    MapItemStringMarketValueRecord,
-    MapItemStringMarketValueRecords,
-    MarketValueRecord,
-    MarketValueRecords,
     ItemString,
     ItemStringTypeEnum,
     AuctionItem,
-    CommodityItem,
 )
 
 
@@ -61,7 +56,7 @@ class TestModels(TestCase):
             bonuses=(),
             mods=(),
         )
-        self.assertEqual(item_string.to_str(), f"p:123")
+        self.assertEqual(item_string.to_str(), "p:123")
 
     def test_item_string_to_str_3(self):
         item_string = ItemString(
@@ -110,10 +105,23 @@ class TestModels(TestCase):
 
     @classmethod
     def mock_bonuses(cls):
-        l = range(1, 100)
-        raw = random.sample(l, 5)
-        srt = sorted(raw)
-        return raw, srt
+        # some random number that might get filtered
+        rnd_any = [random.randint(1, 10000) for _ in range(20)]
+        # plus some actual bonuses that should not get filtered
+        rnd_bonuses = random.sample(list(ItemString.MAP_BONUSES.keys()), 20)
+        in_bonuses = list(set(rnd_bonuses + rnd_any))
+        # filter out bonuses that have ilvl fields
+        in_bonuses = [
+            bonus_id
+            for bonus_id in in_bonuses
+            if not ItemString.SET_BONUS_ILVL_FIELDS
+            & set(ItemString.MAP_BONUSES.get(bonus_id, {}).keys())
+        ]
+        random.shuffle(in_bonuses)
+
+        out_bonuses = filter(ItemString.MAP_BONUSES.__contains__, in_bonuses)
+        out_bonuses = sorted(out_bonuses)
+        return tuple(in_bonuses), tuple(out_bonuses)
 
     def mock_modifiers(self):
         k = range(1, 100)
@@ -167,3 +175,132 @@ class TestModels(TestCase):
         self.assertEqual(item_string.bonuses, None)
         self.assertEqual(item_string.mods, None)
         self.assertEqual(item_string.to_str(), f"p:{item_string.id}")
+
+    def test_item_level(self):
+        bonuses, mods = [8851, 8852, 8801], [
+            {"type": 28, "value": 2164},
+            {"type": 29, "value": 36},
+            {"type": 30, "value": 49},
+            {"type": 38, "value": 7},
+            {"type": 39, "value": 47988},
+            {"type": 40, "value": 856},
+            {"type": 42, "value": 48},
+        ]
+        ret = "i:201937::i340"
+        i = ItemString.from_auction_item(
+            AuctionItem(
+                id=201937,
+                context=0,
+                bonus_lists=bonuses,
+                modifiers=mods,
+            )
+        )
+        self.assertEqual(i.to_str(), ret)
+
+        bonuses, mods = [6655, 1707], [
+            {"type": 9, "value": 30},
+            {"type": 28, "value": 1079},
+        ]
+        ret = "i:25291::i66"
+        i = ItemString.from_auction_item(
+            AuctionItem(
+                id=25291,
+                context=0,
+                bonus_lists=bonuses,
+                modifiers=mods,
+            )
+        )
+        self.assertEqual(i.to_str(), ret)
+
+        bonuses, mods = [7969, 6652, 1679], [
+            {"type": 9, "value": 70},
+            {"type": 28, "value": 2524},
+        ]
+        ret = "i:199038::i302"
+        i = ItemString.from_auction_item(
+            AuctionItem(
+                id=199038,
+                context=0,
+                bonus_lists=bonuses,
+                modifiers=mods,
+            )
+        )
+        self.assertEqual(i.to_str(), ret)
+
+        bonuses, mods = [7968, 6652, 7937, 1687], [
+            {"type": 9, "value": 70},
+            {"type": 28, "value": 2475},
+        ]
+        ret = "i:198996::i292"
+        i = ItemString.from_auction_item(
+            AuctionItem(
+                id=198996,
+                context=0,
+                bonus_lists=bonuses,
+                modifiers=mods,
+            )
+        )
+        self.assertEqual(i.to_str(), ret)
+
+        bonuses, mods = [6654, 1692], [
+            {"type": 9, "value": 58},
+            {"type": 28, "value": 1888},
+        ]
+        ret = "i:24955::i158"
+        i = ItemString.from_auction_item(
+            AuctionItem(
+                id=24955,
+                context=0,
+                bonus_lists=bonuses,
+                modifiers=mods,
+            )
+        )
+        self.assertEqual(i.to_str(), ret)
+
+        bonuses, mods = [596, 601, 689, 1679, 3408], None
+        ret = "i:126997::-4"
+        i = ItemString.from_auction_item(
+            AuctionItem(
+                id=126997,
+                context=0,
+                bonus_lists=bonuses,
+                modifiers=mods,
+            )
+        )
+        self.assertEqual(i.to_str(), ret)
+
+        bonuses, mods = [669, 600, 689, 1712, 3408], None
+        ret = "i:126996::+3"
+        i = ItemString.from_auction_item(
+            AuctionItem(
+                id=126996,
+                context=0,
+                bonus_lists=bonuses,
+                modifiers=mods,
+            )
+        )
+        self.assertEqual(i.to_str(), ret)
+
+        bonuses, mods = [6716, 8156, 1487], [{"type": 28, "value": 2142}]
+        ret = "i:172319::+15"
+        i = ItemString.from_auction_item(
+            AuctionItem(
+                id=172319,
+                context=0,
+                bonus_lists=bonuses,
+                modifiers=mods,
+            )
+        )
+        self.assertEqual(i.to_str(), ret)
+
+        bonuses, mods = [1700, 4928], [{"type": 28, "value": 708}]
+        ret = "i:152837::+10"
+        i = ItemString.from_auction_item(
+            AuctionItem(
+                id=152837,
+                context=0,
+                bonus_lists=bonuses,
+                modifiers=mods,
+            )
+        )
+        self.assertEqual(i.to_str(), ret)
