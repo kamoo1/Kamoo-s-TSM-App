@@ -196,7 +196,7 @@ class TestAuctionDB(TestCase):
         self.assertEqual(meta["duration"], 1)
 
         # assert raises when trying to update meta
-        self.assertRaises(ValueError, db.update_meta, meta_file, 2, 3)
+        self.assertRaises(ValueError, db.update_meta, meta_file, {})
 
         # pick one of the db file for testing
         pick_crid = n_crid - 1
@@ -292,7 +292,7 @@ class TestAuctionDB(TestCase):
 
         # update meta file
         meta_file = db.get_meta_file(region)
-        db.update_meta(meta_file, 2, 3)
+        db.update_meta(meta_file, {"start_ts": 2, "end_ts": 3, "duration": 1})
 
         # assert local changes are kept
         db = AuctionDB(

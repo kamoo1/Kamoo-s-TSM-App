@@ -303,6 +303,10 @@ class ItemString(_BaseModel):
     - Filter the `mods` field, only keep the key-value pairs where the key is
       in `KEEPED_MODIFIERS_TYPES`.
 
+    - Filter the `bonuses` field by the keys of `MAP_BONUSES`, in case of the
+      corresponding dict value of `MAP_BONUSES` contains any field in listed in
+      `SET_BONUS_ILVL_FIELDS`, filter out that bonus id as well.
+
     - Sort the `bonuses` field, `bonuses` is a tuple of ints.
 
     - Pets don't have `mods` or `bonuses` fields, they take `breed_id` from

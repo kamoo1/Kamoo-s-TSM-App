@@ -1,14 +1,14 @@
-from typing import List, Set
+from typing import List, Set, Optional
+import argparse
 import logging
 import sys
 import os
-import re
 
 
 from ah.models import MapItemStringMarketValueRecords, Region
 from ah.storage import TextFile
 from ah.db import AuctionDB
-from ah.api import BNAPI, GHAPI
+from ah.api import GHAPI
 from ah.cache import Cache
 from ah import config
 
@@ -76,8 +76,7 @@ class TSMExporter:
     TSM_VERSION = 41200
     _logger = logging.getLogger("TSMExporter")
 
-    def __init__(self, bn_api: BNAPI, db: AuctionDB, export_file: TextFile) -> None:
-        self.bn_api = bn_api
+    def __init__(self, db: AuctionDB, export_file: TextFile) -> None:
         self.db = db
         self.export_file = export_file
 
@@ -87,6 +86,7 @@ class TSMExporter:
             import winreg
         else:
             raise RuntimeError("Only support windows")
+
         key = winreg.OpenKey(
             winreg.HKEY_LOCAL_MACHINE,
             r"SOFTWARE\WOW6432Node\Blizzard Entertainment\World of Warcraft",
@@ -95,12 +95,17 @@ class TSMExporter:
         return os.path.normpath(path)
 
     @classmethod
-    def get_tsm_export_path(cls, warcraft_dir: str = None) -> str:
-        if not warcraft_dir:
-            warcraft_dir = cls.find_warcraft_dir_windows()
+    def get_tsm_export_path(cls) -> Optional[str]:
+        try:
+            warcraft_path = cls.find_warcraft_dir_windows()
+        except Exception:
+            return None
+
+        if not warcraft_path.endswith("_retail_"):
+            return None
 
         return os.path.join(
-            warcraft_dir,
+            warcraft_path,
             "Interface",
             "AddOns",
             "TradeSkillMaster_AppHelper",
@@ -195,15 +200,22 @@ class TSMExporter:
         meta = self.db.load_meta(meta_file)
         if not meta:
             raise ValueError(f"meta file {meta_file} not found or Empty.")
-        ts_update_start = meta["start_ts"]
-        ts_update_end = meta["end_ts"]
+        ts_update_start = meta["update"]["start_ts"]
+        ts_update_end = meta["update"]["end_ts"]
+        cr_data = meta["connected_realms"]
 
-        crs = self.bn_api.pull_connected_realms(region_name)
+        # makes sure realm names are all valid
+        all_realms = {
+            realm_name for realm_names in cr_data.values() for realm_name in realm_names
+        }
+        if not realm_names <= all_realms:
+            raise ValueError(f"invalid realm names: {realm_names - all_realms}. ")
+
         region_data = MapItemStringMarketValueRecords()
-
-        for crid, cr in crs.items():
+        for crid, realm_names_ in cr_data.items():
+            crid = int(crid)
+            realm_names_ = set(realm_names_)
             # find all realms user want to export in a cr group
-            realm_names_ = set(realm["name"] for realm in cr["realms"])
             realm_names_export = realm_names & realm_names_
 
             cr_auction_file = self.db.get_db_file(region_name, crid)
@@ -271,19 +283,11 @@ def main(
     export_region: Region = None,
     export_realms: Set[str] = None,
     export_path: str = None,
-    bn_api: BNAPI = None,
     cache: Cache = None,
 ):
     if cache is None:
         cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME + "_cache")
         cache = Cache(cache_path)
-
-    if bn_api is None:
-        bn_api = BNAPI(
-            config.BN_CLIENT_ID,
-            config.BN_CLIENT_SECRET,
-            cache,
-        )
 
     gh_api = GHAPI(cache)
 
@@ -301,21 +305,66 @@ def main(
         gh_api,
     )
 
-    if not export_path:
-        export_path = TSMExporter.get_tsm_export_path()
-
     export_file = TextFile(export_path)
-    exporter = TSMExporter(bn_api, db, export_file)
+    exporter = TSMExporter(db, export_file)
     exporter.export_file.remove()
     exporter.export_region(export_region, export_realms)
 
 
+def parse_args(raw_args):
+    parser = argparse.ArgumentParser()
+    default_db_path = "./db"
+    default_compress_db = True
+    default_export_path = TSMExporter.get_tsm_export_path()
+    parser.add_argument(
+        "--db_path",
+        type=str,
+        default=default_db_path,
+        help=f"path to the database, default: {default_db_path}",
+    )
+    parser.add_argument(
+        "--compress_db",
+        type=bool,
+        default=default_compress_db,
+        help=f"compress the database, default: {default_compress_db}",
+    )
+    parser.add_argument(
+        "--repo",
+        type=str,
+        default=None,
+        help="Address of Github repo that's hosting the db files. If given, "
+        "download and use repo's db instead of local ones. "
+        "Note: local db will be overwritten.",
+    )
+    parser.add_argument(
+        "--export_path",
+        type=str,
+        default=default_export_path,
+        help=f"Path to export TSM data, default: {default_export_path}",
+    )
+    parser.add_argument(
+        "export_region",
+        type=str,
+        help="Region to export",
+    )
+    parser.add_argument(
+        "export_realms",
+        type=str,
+        nargs="*",
+        help="Realms to export, separated by space.",
+    )
+    args = parser.parse_args(raw_args)
+    if not args.export_path:
+        raise ValueError(
+            "Unable to locate TSM's auction data path, please specify it manually with"
+            " --export_path. (should be something like '"
+            "%warcraft%/Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua')"
+        )
+    args.export_realms = set(args.export_realms)
+    return args
+
+
 if __name__ == "__main__":
-    kwargs = {
-        "db_path": "./db",
-        "compress_db": True,
-        "repo": "https://github.com/kamoo1/TSM-Backend",
-        "export_region": "tw",
-        "export_realms": {"日落沼澤"},
-    }
-    main(**kwargs)
+    logging.basicConfig(level=config.LOGGING_LEVEL)
+    args = parse_args(sys.argv[1:])
+    main(**vars(args))
