@@ -14,20 +14,22 @@ from ah import config
 
 
 class TSMExporter:
-    REALM_EXPORTS = [
-        {
-            "type": "AUCTIONDB_REALM_DATA",
-            "sources": ["auctions"],
-            "fields": [
-                "itemString",
-                "minBuyout",
-                "numAuctions",
-                "marketValueRecent",
-            ],
-        },
+    REALM_AUCTIONS_EXPORT = {
+        "type": "AUCTIONDB_REALM_DATA",
+        "sources": ["realm_auctions"],
+        "desc": "realm latest scan data",
+        "fields": [
+            "itemString",
+            "minBuyout",
+            "numAuctions",
+            "marketValueRecent",
+        ],
+    }
+    REALM_AUCTIONS_COMMODITIES_EXPORTS = [
         {
             "type": "AUCTIONDB_REALM_HISTORICAL",
-            "sources": ["auctions"],
+            "sources": ["realm_auctions", "commodities"],
+            "desc": "realm historical data, realm auction and commodities",
             "fields": [
                 "itemString",
                 "historical",
@@ -35,7 +37,8 @@ class TSMExporter:
         },
         {
             "type": "AUCTIONDB_REALM_SCAN_STAT",
-            "sources": ["auctions"],
+            "sources": ["realm_auctions", "commodities"],
+            "desc": "realm two week data, realm auction and commodities",
             "fields": [
                 "itemString",
                 "marketValue",
@@ -45,6 +48,7 @@ class TSMExporter:
     COMMODITIES_EXPORT = {
         "type": "AUCTIONDB_REGION_COMMODITY",
         "sources": ["commodities"],
+        "desc": "region commodity data",
         "fields": [
             "itemString",
             "minBuyout",
@@ -52,10 +56,11 @@ class TSMExporter:
             "marketValueRecent",
         ],
     }
-    REGION_EXPORTS = [
+    REGION_AUCTIONS_COMMODITIES_EXPORTS = [
         {
             "type": "AUCTIONDB_REGION_STAT",
-            "sources": ["auctions", "commodities"],
+            "sources": ["region_auctions", "commodities"],
+            "desc": "region two week data, auctions from all realms and commodities",
             "fields": [
                 "itemString",
                 "regionMarketValue",
@@ -63,7 +68,8 @@ class TSMExporter:
         },
         {
             "type": "AUCTIONDB_REGION_HISTORICAL",
-            "sources": ["auctions", "commodities"],
+            "sources": ["region_auctions", "commodities"],
+            "desc": "region historical data, auctions from all realms and commodities",
             "fields": [
                 "itemString",
                 "regionHistorical",
@@ -195,69 +201,86 @@ class TSMExporter:
         with file.open("a", newline="\n", encoding="utf-8") as f:
             f.write(text_out + "\n")
 
-    def export_region(self, region_name: str, realm_names: Set[str]):
-        meta_file = self.db.get_meta_file(region_name)
+    def export_region(self, export_region_name: str, export_realm_name: Set[str]):
+        meta_file = self.db.get_meta_file(export_region_name)
         meta = self.db.load_meta(meta_file)
         if not meta:
             raise ValueError(f"meta file {meta_file} not found or Empty.")
         ts_update_start = meta["update"]["start_ts"]
         ts_update_end = meta["update"]["end_ts"]
-        cr_data = meta["connected_realms"]
+        connected_realms = meta["connected_realms"]
 
         # makes sure realm names are all valid
         all_realms = {
-            realm_name for realm_names in cr_data.values() for realm_name in realm_names
+            realm_name
+            for realm_names in connected_realms.values()
+            for realm_name in realm_names
         }
-        if not realm_names <= all_realms:
-            raise ValueError(f"invalid realm names: {realm_names - all_realms}. ")
+        if not export_realm_name <= all_realms:
+            raise ValueError(f"invalid realm names: {export_realm_name - all_realms}. ")
 
-        region_data = MapItemStringMarketValueRecords()
-        for crid, realm_names_ in cr_data.items():
-            crid = int(crid)
-            realm_names_ = set(realm_names_)
-            # find all realms user want to export in a cr group
-            realm_names_export = realm_names & realm_names_
-
-            cr_auction_file = self.db.get_db_file(region_name, crid)
-            cr_auction_data = self.db.load_db(cr_auction_file)
-            if cr_auction_data:
-                region_data.extend(cr_auction_data)
-                for export_realm in self.REALM_EXPORTS:
-                    for name in realm_names_export:
-                        # realms in same cr group share
-                        # the same auction house data
-                        self.export_append_data(
-                            self.export_file,
-                            cr_auction_data,
-                            export_realm["fields"],
-                            export_realm["type"],
-                            name,
-                            ts_update_start,
-                            ts_update_end,
-                        )
-
-        region_commodity_file = self.db.get_db_file(region_name)
-        region_commodity_data = self.db.load_db(region_commodity_file)
-        if region_commodity_data:
-            region_data.extend(region_commodity_data)
+        region_auctions_commodities_data = MapItemStringMarketValueRecords()
+        commodity_file = self.db.get_db_file(export_region_name)
+        commodity_data = self.db.load_db(commodity_file)
+        if commodity_data:
+            region_auctions_commodities_data.extend(commodity_data)
             self.export_append_data(
                 self.export_file,
-                region_commodity_data,
+                commodity_data,
                 self.COMMODITIES_EXPORT["fields"],
                 self.COMMODITIES_EXPORT["type"],
-                region_name.upper(),
+                export_region_name.upper(),
                 ts_update_start,
                 ts_update_end,
             )
 
-        if region_data:
-            for region_export in self.REGION_EXPORTS:
+        for connected_realm_id, connected_realm_names in connected_realms.items():
+            connected_realm_id = int(connected_realm_id)
+            connected_realm_names = set(connected_realm_names)
+            # find all realm names we want to export under this connected realm,
+            # they share the same auction data
+            sub_export_realm_name = export_realm_name & connected_realm_names
+            db_file = self.db.get_db_file(export_region_name, connected_realm_id)
+            auction_data = self.db.load_db(db_file)
+            if not auction_data:
+                continue
+
+            for name in sub_export_realm_name:
                 self.export_append_data(
                     self.export_file,
-                    region_data,
+                    auction_data,
+                    self.REALM_AUCTIONS_EXPORT["fields"],
+                    self.REALM_AUCTIONS_EXPORT["type"],
+                    name,
+                    ts_update_start,
+                    ts_update_end,
+                )
+
+            realm_auctions_commodities_data = MapItemStringMarketValueRecords()
+            realm_auctions_commodities_data.extend(auction_data)
+            realm_auctions_commodities_data.extend(commodity_data)
+            region_auctions_commodities_data.extend(auction_data)
+
+            for export_realm in self.REALM_AUCTIONS_COMMODITIES_EXPORTS:
+                for name in sub_export_realm_name:
+                    self.export_append_data(
+                        self.export_file,
+                        realm_auctions_commodities_data,
+                        export_realm["fields"],
+                        export_realm["type"],
+                        name,
+                        ts_update_start,
+                        ts_update_end,
+                    )
+
+        if region_auctions_commodities_data:
+            for region_export in self.REGION_AUCTIONS_COMMODITIES_EXPORTS:
+                self.export_append_data(
+                    self.export_file,
+                    region_auctions_commodities_data,
                     region_export["fields"],
                     region_export["type"],
-                    region_name.upper(),
+                    export_region_name.upper(),
                     ts_update_start,
                     ts_update_end,
                 )
