@@ -278,7 +278,6 @@ class TSMExporter:
 
 def main(
     db_path: str = None,
-    compress_db: bool = None,
     repo: str = None,
     export_region: Region = None,
     export_realms: Set[str] = None,
@@ -286,7 +285,7 @@ def main(
     cache: Cache = None,
 ):
     if cache is None:
-        cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME + "_cache")
+        cache_path = config.DEFAULT_CACHE_PATH
         cache = Cache(cache_path)
 
     gh_api = GHAPI(cache)
@@ -299,7 +298,7 @@ def main(
     db = AuctionDB(
         db_path,
         config.MARKET_VALUE_RECORD_EXPIRES,
-        compress_db,
+        config.DEFAULT_DB_COMPRESS,
         mode,
         repo,
         gh_api,
@@ -314,19 +313,12 @@ def main(
 def parse_args(raw_args):
     parser = argparse.ArgumentParser()
     default_db_path = "./db"
-    default_compress_db = True
     default_export_path = TSMExporter.get_tsm_export_path()
     parser.add_argument(
         "--db_path",
         type=str,
         default=default_db_path,
         help=f"path to the database, default: {default_db_path}",
-    )
-    parser.add_argument(
-        "--compress_db",
-        type=bool,
-        default=default_compress_db,
-        help=f"compress the database, default: {default_compress_db}",
     )
     parser.add_argument(
         "--repo",

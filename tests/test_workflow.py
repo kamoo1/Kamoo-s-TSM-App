@@ -139,8 +139,7 @@ class TestWorkflow(TestCase):
         item_id = "123"
         region = "us"
         task_manager = TaskManager(
-            BNAPI(wrapper=DummyAPIWrapper()),
-            AuctionDB(temp_path)
+            BNAPI(wrapper=DummyAPIWrapper()), AuctionDB(temp_path)
         )
         file = task_manager.db.get_db_file(region)
         resp = CommoditiesResponse.parse_obj(
@@ -259,12 +258,10 @@ class TestWorkflow(TestCase):
 
         region = "us"
         db_path = f"{temp.name}/db"
-        compress_db = True
         bn_api = BNAPI(wrapper=DummyAPIWrapper())
         with temp:
             main(
                 db_path,
-                compress_db,
                 region,
                 None,
                 bn_api,
@@ -283,10 +280,8 @@ class TestWorkflow(TestCase):
         raw_args = [
             "--db_path",
             "db",
-            "--compress_db",
             "us",
         ]
         args = parse_args(raw_args)
         self.assertEqual(args.region, "us")
         self.assertEqual(args.db_path, "db")
-        self.assertEqual(args.compress_db, True)

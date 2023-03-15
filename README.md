@@ -11,7 +11,7 @@ To run update locally, follow these steps:
 
 2. Run the following command:
 ```bash
-python -m ah.updater --db_path ./db --compress_db {region}
+python -m ah.updater {region}
 ```
 Replace `{region}` with the region you want to export data from.
 
