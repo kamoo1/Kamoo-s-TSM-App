@@ -342,7 +342,7 @@ def parse_args(raw_args):
     parser.add_argument(
         "export_realms",
         type=str,
-        nargs="*",
+        nargs="+",
         help="Realms to export, separated by space.",
     )
     args = parser.parse_args(raw_args)
