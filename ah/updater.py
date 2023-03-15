@@ -105,21 +105,22 @@ class TaskManager:
 
 def main(
     db_path: str = None,
-    compress_db: bool = None,
     region: Region = None,
     cache: Cache = None,
     bn_api: BNAPI = None,
 ):
     if bn_api is None:
         if cache is None:
-            cache_path = os.path.join(config.TEMP_PATH, config.APP_NAME + "_cache")
+            cache_path = config.DEFAULT_CACHE_PATH
             cache = Cache(cache_path)
         bn_api = BNAPI(
             config.BN_CLIENT_ID,
             config.BN_CLIENT_SECRET,
             cache,
         )
-    db = AuctionDB(db_path, config.MARKET_VALUE_RECORD_EXPIRES, compress_db)
+    db = AuctionDB(
+        db_path, config.MARKET_VALUE_RECORD_EXPIRES, config.DEFAULT_DB_COMPRESS
+    )
     task_manager = TaskManager(bn_api, db)
     start_ts, end_ts = task_manager.update_region_dbs(region)
     task_manager.update_region_meta(region, start_ts, end_ts)
@@ -128,13 +129,7 @@ def main(
 def parse_args(raw_args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--db_path", help="Path to database", default=config.TEMP_PATH, type=str
-    )
-    parser.add_argument(
-        "--compress_db",
-        help="Use compression for DB files",
-        default=False,
-        action="store_true",
+        "--db_path", help="Path to database", default=config.DEFAULT_DB_PATH, type=str
     )
     parser.add_argument("region", help="Region to export", type=Region)
     args = parser.parse_args(raw_args)
