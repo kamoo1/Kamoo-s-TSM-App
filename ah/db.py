@@ -132,12 +132,25 @@ class AuctionDB:
         return self.gh_api.get_asset(url)
 
     def fork_file(self, file: BaseFile) -> None:
-        assets = self.pull_assets_url()
+        try:
+            assets = self.pull_assets_url()
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to get assets info from {self.fork_repo}"
+            ) from e
+
         if file.file_name not in assets:
-            raise FileNotFoundError(f"File not found in assets: {file.file_name}")
+            raise FileNotFoundError(f"File not listed in assets: {file.file_name}")
+
         asset_url = assets[file.file_name]
-        self._logger.info(f"Downloading {file.file_name} from {asset_url}")
-        asset_data = self.pull_asset(asset_url)
+        try:
+            asset_data = self.pull_asset(asset_url)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to download asset {file.file_name} from {asset_url}"
+            ) from e
+
+        self._logger.info(f"Downloaded asset {file.file_name} from {asset_url}")
 
         # we don't want it to be compressed multiple times
         # since we're essentially doing a copy here.
