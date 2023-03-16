@@ -3,7 +3,7 @@ from random import shuffle, randint
 from tempfile import TemporaryDirectory
 import os
 
-from ah.updater import TaskManager
+from ah.updater import Updater
 from ah.models import (
     CommoditiesResponse,
     MapItemStringMarketValueRecords,
@@ -138,7 +138,7 @@ class TestWorkflow(TestCase):
         expected_number_of_records = 1 if price_groups else 0
         item_id = "123"
         region = "us"
-        task_manager = TaskManager(
+        task_manager = Updater(
             BNAPI(wrapper=DummyAPIWrapper()), AuctionDB(temp_path)
         )
         file = task_manager.db.get_db_file(region)
@@ -194,7 +194,7 @@ class TestWorkflow(TestCase):
     def test_work_flow_basic_integrity(self):
         temp = TemporaryDirectory()
         db = AuctionDB(temp.name)
-        task_manager = TaskManager(
+        task_manager = Updater(
             BNAPI(wrapper=DummyAPIWrapper()),
             db,
         )

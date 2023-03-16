@@ -201,7 +201,7 @@ class TSMExporter:
         with file.open("a", newline="\n", encoding="utf-8") as f:
             f.write(text_out + "\n")
 
-    def export_region(self, export_region_name: str, export_realm_name: Set[str]):
+    def export_region(self, export_region_name: Region, export_realm_name: Set[str]):
         meta_file = self.db.get_meta_file(export_region_name)
         meta = self.db.load_meta(meta_file)
         if not meta:

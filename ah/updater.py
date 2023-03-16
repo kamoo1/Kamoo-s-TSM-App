@@ -1,4 +1,3 @@
-import os
 import sys
 import logging
 import argparse
@@ -20,7 +19,7 @@ from ah import config
 from ah.cache import Cache
 
 
-class TaskManager:
+class Updater:
     def __init__(
         self,
         bn_api: BNAPI,
@@ -121,7 +120,7 @@ def main(
     db = AuctionDB(
         db_path, config.MARKET_VALUE_RECORD_EXPIRES, config.DEFAULT_DB_COMPRESS
     )
-    task_manager = TaskManager(bn_api, db)
+    task_manager = Updater(bn_api, db)
     start_ts, end_ts = task_manager.update_region_dbs(region)
     task_manager.update_region_meta(region, start_ts, end_ts)
 
