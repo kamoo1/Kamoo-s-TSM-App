@@ -65,5 +65,5 @@ jobs:
         files: |
           ${{ env.DB_PATH }}/*.gz
           ${{ env.DB_PATH }}/*.bin
-          ${{ env.DB_PATH }}/meta-*.json
+          ${{ env.DB_PATH }}/*.json
         name: DB ${{ env.JOB_START_TS }}
