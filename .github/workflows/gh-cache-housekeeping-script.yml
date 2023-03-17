@@ -3,6 +3,7 @@ name: GitHub Cache Housekeeping Script
 on:
   workflow_dispatch:
 
+jobs:
   gh_cache_housekeeping_script:
     runs-on: ubuntu-latest
     steps:
