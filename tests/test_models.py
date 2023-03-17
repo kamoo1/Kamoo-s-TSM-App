@@ -32,30 +32,27 @@ class TestModels(TestCase):
             game_version=GameVersionEnum.RETAIL,
             region=RegionEnum.US,
         )
-        self.assertEqual(ns.to_str(), "dynamic--us")
-        self.assertEqual(repr(ns), '"dynamic--us"')
+        self.assertEqual(ns.to_str(), "dynamic-us")
+        self.assertEqual(repr(ns), '"dynamic-us"')
 
         ns = Namespace.from_str("dynamic-classic1x-us")
         self.assertEqual(ns.category, NameSpaceCategoriesEnum.DYNAMIC)
         self.assertEqual(ns.game_version, GameVersionEnum.CLASSIC)
         self.assertEqual(ns.region, RegionEnum.US)
 
-        ns = Namespace.from_str("static--us")
+        ns = Namespace.from_str("static-us")
         self.assertEqual(ns.category, NameSpaceCategoriesEnum.STATIC)
         self.assertEqual(ns.game_version, GameVersionEnum.RETAIL)
         self.assertEqual(ns.region, RegionEnum.US)
 
         with self.assertRaises(ValueError):
-            Namespace.from_str("dynamic--xx")
-
-        with self.assertRaises(ValueError):
-            Namespace.from_str("dynamic-us")
+            Namespace.from_str("dynamic-xx")
 
         with self.assertRaises(ValueError):
             Namespace.from_str("dynamic-xx-us")
 
         with self.assertRaises(ValueError):
-            Namespace.from_str("xx--us")
+            Namespace.from_str("xx-us")
 
         with self.assertRaises(ValueError):
             Namespace.from_str("static-xx-us")
