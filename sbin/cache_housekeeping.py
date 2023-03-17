@@ -2,21 +2,6 @@ import os
 import re
 import argparse
 
-from ah.models import (
-    DBFileName,
-    DBType,
-    DBTypeEnum,
-    DBExtEnum,
-    Namespace,
-    RegionEnum,
-    GameVersionEnum,
-    NameSpaceCategoriesEnum,
-)
-
-curr_db_data_matcher = re.compile(
-    r"^(?P<region>tw)-(?P<db_type>\d+-auctions|commodities)\.(?P<ext>gz|bin)$"
-)
-
 
 def move(src, dst):
     print(f"Moving {src} to {dst}")
@@ -25,55 +10,30 @@ def move(src, dst):
 
 
 def rename_db_files(db_path: str):
-    name_space = Namespace(
-        category=NameSpaceCategoriesEnum.DYNAMIC,
-        region=RegionEnum.TW,
-        game_version=GameVersionEnum.RETAIL,
-    )
-
-    curr_fns = list(os.listdir(db_path))
-    print(f"Current files: {curr_fns}")
-
-    # list all file names under `db_path`
-    for curr_fn in curr_fns:
-        # match `DB_FILE_MATCHER`
-        m = curr_db_data_matcher.match(curr_fn)
-        if m:
-            _ = m.group("region")
-            db_type_str = m.group("db_type")
-            if db_type_str.endswith(DBTypeEnum.AUCTIONS):
-                db_type = DBType.from_str(
-                    f"{DBTypeEnum.AUCTIONS}{db_type_str.split('-')[0]}"
-                )
-            else:
-                db_type = DBType.from_str(DBTypeEnum.COMMODITIES)
-
-            ext = m.group("ext")
-            new_fn = DBFileName(
-                namespace=name_space,
-                db_type=db_type,
-                ext=ext,
-            )
-            src = os.path.join(db_path, curr_fn)
-            dst = os.path.join(db_path, str(new_fn))
-            move(src, dst)
-            continue
-
-        if curr_fn == "meta-tw.json":
-            new_fn = DBFileName(
-                namespace=name_space,
-                db_type=DBTypeEnum.META,
-                ext=DBExtEnum.JSON,
-            )
-            src = os.path.join(db_path, curr_fn)
-            dst = os.path.join(db_path, str(new_fn))
-            move(src, dst)
+    mvs = [
+        # 5375
+        ("dynamic--tw_auctions5735.gz", "dynamic-tw_auctions5735.gz"),
+        # 5376
+        ("dynamic--tw_auctions5736.gz", "dynamic-tw_auctions5736.gz"),
+        # 963
+        ("dynamic--tw_auctions963.gz", "dynamic-tw_auctions963.gz"),
+        # 966
+        ("dynamic--tw_auctions966.gz", "dynamic-tw_auctions966.gz"),
+        # 980
+        ("dynamic--tw_auctions980.gz", "dynamic-tw_auctions980.gz"),
+        ("dynamic--tw_commodities.gz", "dynamic-tw_commodities.gz"),
+        ("dynamic--tw_meta.json", "dynamic-tw_meta.json"),
+    ]
+    for src, dst in mvs:
+        move(os.path.join(db_path, src), os.path.join(db_path, dst))
 
 
 def main(db_path: str = None):
+    before_fns = list(os.listdir(db_path))
+    print(f"Before files: {before_fns}")
     rename_db_files(db_path)
-    after_fns = list(os.listdir(db_path))
-    print(f"After files: {after_fns}")
+    before_fns = list(os.listdir(db_path))
+    print(f"After files: {before_fns}")
 
 
 if __name__ == "__main__":
