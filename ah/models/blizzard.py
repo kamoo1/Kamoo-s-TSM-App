@@ -62,13 +62,16 @@ class Namespace(_BaseModel):
 
     def to_str(self) -> str:
         parts = [self.category, self.game_version, self.region]
-        return self.SEP.join([p for p in parts])
+        return self.SEP.join([p for p in parts if p])
 
     @classmethod
     def from_str(cls, ns: str) -> "Namespace":
         parts = ns.split(cls.SEP)
         if len(parts) == 3:
             category, game_version, region = parts
+        elif len(parts) == 2:
+            category, region = parts
+            game_version = GameVersionEnum.RETAIL
         else:
             raise ValueError(f"Invalid namespace: {ns}")
         return cls(category=category, game_version=game_version, region=region)

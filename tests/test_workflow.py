@@ -288,10 +288,10 @@ class TestWorkflow(TestCase):
             # get all files under db_path
             files = set(os.listdir(db_path))
             expected = {
-                "dynamic--us_meta.json",
-                "dynamic--us_auctions1.gz",
-                "dynamic--us_auctions2.gz",
-                "dynamic--us_commodities.gz",
+                "dynamic-us_meta.json",
+                "dynamic-us_auctions1.gz",
+                "dynamic-us_auctions2.gz",
+                "dynamic-us_commodities.gz",
             }
             self.assertSetEqual(expected, files)
 
