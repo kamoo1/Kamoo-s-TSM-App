@@ -20,7 +20,8 @@ curr_db_data_matcher = re.compile(
 
 def move(src, dst):
     print(f"Moving {src} to {dst}")
-    pass
+    # we are under same directory
+    os.rename(src, dst)
 
 
 def rename_db_files(db_path: str):
@@ -71,6 +72,8 @@ def rename_db_files(db_path: str):
 
 def main(db_path: str = None):
     rename_db_files(db_path)
+    after_fns = list(os.listdir(db_path))
+    print(f"After files: {after_fns}")
 
 
 if __name__ == "__main__":
