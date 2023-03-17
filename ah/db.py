@@ -10,7 +10,12 @@ from ah.storage import BinaryFile, TextFile, BaseFile
 from ah.models import (
     MapItemStringMarketValueRecords,
     MapItemStringMarketValueRecord,
-    Region,
+    DBFileName,
+    Namespace,
+    DBExtEnum,
+    DBTypeEnum,
+    DBType,
+    GameVersionEnum,
 )
 from ah.defs import SECONDS_IN
 from typing import Dict, Optional, Any
@@ -20,19 +25,10 @@ __all__ = ("AuctionDB",)
 
 
 class AuctionDB:
-    FN_REGION_COMMODITIES = "{region}-commodities.{suffix}"
-    FN_CRID_AUCTIONS = "{region}-{crid}-auctions.{suffix}"
-    FN_SUFFIX_GZ = "gz"
-    FN_SUFFIX_BIN = "bin"
-    FN_META = "meta-{region}.json"
     MIN_RECORDS_EXPIRES_IN = 60 * SECONDS_IN.DAY
     DEFAULT_USE_COMPRESSION = True
     REPO_MATCHER = re.compile(
         r"^(:?https://)?github.com/(?P<user>[^/]+)/(?P<repo>[^/]+).*$"
-    )
-    __region_regex = Region.get_regex()
-    DB_FILE_MATCHER = re.compile(
-        rf"^(?:{__region_regex})-(?:\d+-auctions|commodities)\.(?:gz|bin)$"
     )
     # local mode
     MODE_LOCAL_RW = "MODE_LOCAL_RW"
@@ -83,21 +79,6 @@ class AuctionDB:
     def validate_repo(cls, repo: str) -> Optional[re.Match]:
         return cls.REPO_MATCHER.match(repo)
 
-    @singledispatchmethod
-    @classmethod
-    def validate_db_name(cls, arg) -> Optional[re.Match]:
-        raise NotImplementedError(f"Invalid arg type: {type(arg)}")
-
-    @validate_db_name.register
-    @classmethod
-    def _(cls, file: BaseFile) -> Optional[re.Match]:
-        return cls.DB_FILE_MATCHER.match(file.file_name)
-
-    @validate_db_name.register
-    @classmethod
-    def _(cls, file_name: str) -> Optional[re.Match]:
-        return cls.DB_FILE_MATCHER.match(file_name)
-
     def update_db(
         self, file: BinaryFile, increment: MapItemStringMarketValueRecord, ts_now: int
     ) -> "MapItemStringMarketValueRecords":
@@ -131,12 +112,14 @@ class AuctionDB:
     def pull_asset(self, url) -> bytes:
         return self.gh_api.get_asset(url)
 
+    # TODO: maybe add `str` overload for all methods
+    # having `Basefile` in their signature?
     def fork_file(self, file: BaseFile) -> None:
         try:
             assets = self.pull_assets_url()
         except Exception as e:
             raise RuntimeError(
-                f"Failed to get assets info from {self.fork_repo}"
+                f"Failed to download asset map from {self.fork_repo}"
             ) from e
 
         if file.file_name not in assets:
@@ -179,47 +162,63 @@ class AuctionDB:
         return db
 
     @load_db.register
+    # XXX: test this one, when crid = None
     def _(self, file_name: str) -> "MapItemStringMarketValueRecords":
-        if file_name.endswith(self.FN_SUFFIX_GZ):
-            use_compression = True
-        else:
-            use_compression = False
-
-        file = BinaryFile(
-            os.path.join(self.data_path, file_name),
-            use_compression=use_compression,
+        file_name_ = DBFileName.from_str(file_name)
+        file = self.get_file(
+            file_name_.namespace,
+            file_name_.db_type.type,
+            crid=file_name_.db_type.crid,
         )
         return self.load_db(file)
 
-    def list_db_name(self):
+    def list_file(self):
         candidates = os.listdir(self.data_path)
-        db_names = [fn for fn in candidates if self.validate_db_name(fn)]
-        return db_names
+        ret = []
+        for file_name in candidates:
+            try:
+                DBFileName.from_str(file_name)
+            except Exception:
+                continue
+            file_path = os.path.join(self.data_path, file_name)
+            if os.path.isfile(file_path):
+                ret.append(file_name)
+        return ret
 
-    def get_db_file(self, region: Region, crid: int = None) -> BinaryFile:
-        """
-        if only region given, get commodities file
-        if both region and crid given, get auctions file
-        """
-        fn_suffix = self.FN_SUFFIX_GZ if self.use_compression else self.FN_SUFFIX_BIN
-        if region and crid is not None:
-            fn = self.FN_CRID_AUCTIONS.format(
-                region=region, crid=crid, suffix=fn_suffix
+    # XXX: update gh_action
+    def get_file(
+        self,
+        namespace: Namespace,
+        db_type_e: DBTypeEnum,
+        crid: Optional[int] = None,
+    ) -> BaseFile:
+        if (
+            db_type_e == DBTypeEnum.COMMODITIES
+            and namespace.game_version != GameVersionEnum.RETAIL
+        ):
+            raise ValueError(
+                f"Only retail has commodities db, got {namespace.game_version=!r}"
             )
-        elif region:
-            fn = self.FN_REGION_COMMODITIES.format(region=region, suffix=fn_suffix)
 
+        if db_type_e in (DBTypeEnum.COMMODITIES, DBTypeEnum.META):
+            db_type = DBType(type=db_type_e)
+        elif db_type_e == DBTypeEnum.AUCTIONS:
+            db_type = DBType(type=db_type_e, crid=crid)
         else:
-            raise ValueError("crid given without region")
+            raise ValueError(f"Invalid `db_type_e` for get_file: {db_type_e!r}")
 
-        file_path = os.path.join(self.data_path, fn)
-        file = BinaryFile(file_path, use_compression=self.use_compression)
-        return file
+        if db_type.type == DBTypeEnum.META:
+            ext = DBExtEnum.JSON
+        else:
+            ext = DBExtEnum.GZ if self.use_compression else DBExtEnum.BIN
 
-    def get_meta_file(self, region: Region) -> TextFile:
-        fn = self.FN_META.format(region=region)
-        file_path = os.path.join(self.data_path, fn)
-        file = TextFile(file_path)
+        file_name = DBFileName(namespace=namespace, db_type=db_type, ext=ext)
+        file_path = os.path.join(self.data_path, str(file_name))
+        if db_type.type == DBTypeEnum.META:
+            file = TextFile(file_path)
+        else:
+            file = BinaryFile(file_path, use_compression=self.use_compression)
+
         return file
 
     def ensure_file(self, file: BaseFile) -> None:

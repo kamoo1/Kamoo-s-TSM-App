@@ -3,13 +3,18 @@ from random import shuffle, randint
 from tempfile import TemporaryDirectory
 import os
 
-from ah.updater import TaskManager
+from ah.updater import Updater
 from ah.models import (
     CommoditiesResponse,
     MapItemStringMarketValueRecords,
     MapItemStringMarketValueRecord,
     ItemString,
     ItemStringTypeEnum,
+    GameVersionEnum,
+    Namespace,
+    NameSpaceCategoriesEnum,
+    DBTypeEnum,
+    RegionEnum,
 )
 from ah.api import BNAPI
 from ah.db import AuctionDB
@@ -130,7 +135,7 @@ class TestWorkflow(TestCase):
         }
 
     # TODO: test remove expired, test save load data integrity (include orderr)
-    def assert_workflow(self, temp_path, price_groups, expected_mv):
+    def assert_workflow(self, temp_path, ns_cate, game_ver, price_groups, expected_mv):
         # we only expect one entry (unique item id) in this test, if price group not
         # present, then there's no item id
         expected_number_of_entries = 1 if price_groups else 0
@@ -138,10 +143,13 @@ class TestWorkflow(TestCase):
         expected_number_of_records = 1 if price_groups else 0
         item_id = "123"
         region = "us"
-        task_manager = TaskManager(
-            BNAPI(wrapper=DummyAPIWrapper()), AuctionDB(temp_path)
+        namespace = Namespace(
+            category=ns_cate,
+            game_version=game_ver,
+            region=region,
         )
-        file = task_manager.db.get_db_file(region)
+        task_manager = Updater(BNAPI(wrapper=DummyAPIWrapper()), AuctionDB(temp_path))
+        file = task_manager.db.get_file(namespace, DBTypeEnum.COMMODITIES)
         resp = CommoditiesResponse.parse_obj(
             self.mock_request_commodities_single_item(item_id, price_groups)
         )
@@ -181,22 +189,32 @@ class TestWorkflow(TestCase):
         ]
         expected_mv = 14
         temp = TemporaryDirectory()
+        cate = NameSpaceCategoriesEnum.STATIC
+        game_ver = GameVersionEnum.RETAIL
         with temp:
-            self.assert_workflow(temp.name, price_groups, expected_mv)
+            self.assert_workflow(temp.name, cate, game_ver, price_groups, expected_mv)
 
     def test_workflow_edge(self):
         price_groups = []
         expected_mv = None
         temp = TemporaryDirectory()
+        cate = NameSpaceCategoriesEnum.DYNAMIC
+        game_ver = GameVersionEnum.RETAIL
         with temp:
-            self.assert_workflow(temp.name, price_groups, expected_mv)
+            self.assert_workflow(temp.name, cate, game_ver, price_groups, expected_mv)
 
     def test_work_flow_basic_integrity(self):
         temp = TemporaryDirectory()
         db = AuctionDB(temp.name)
-        task_manager = TaskManager(
+        task_manager = Updater(
             BNAPI(wrapper=DummyAPIWrapper()),
             db,
+        )
+        region = "us"
+        namespace = Namespace(
+            category=NameSpaceCategoriesEnum.STATIC,
+            game_version=GameVersionEnum.CLASSIC,
+            region=region,
         )
         with temp:
             item_count = 100
@@ -229,9 +247,8 @@ class TestWorkflow(TestCase):
             # expected_item_records = 1
 
             timestamp = test_resp.timestamp
-            region = "us"
             crid = 123
-            file = task_manager.db.get_db_file(region, crid)
+            file = task_manager.db.get_file(namespace, DBTypeEnum.AUCTIONS, crid)
             increments = MapItemStringMarketValueRecord.from_response(test_resp)
 
             for i in range(1, 10):
@@ -257,31 +274,36 @@ class TestWorkflow(TestCase):
         temp = TemporaryDirectory()
 
         region = "us"
+        game_version = GameVersionEnum.RETAIL
         db_path = f"{temp.name}/db"
         bn_api = BNAPI(wrapper=DummyAPIWrapper())
         with temp:
             main(
                 db_path,
+                game_version,
                 region,
                 None,
                 bn_api,
             )
             # get all files under db_path
-            files = sorted(os.listdir(db_path))
-            expected = [
-                "meta-us.json",
-                "us-1-auctions.gz",
-                "us-2-auctions.gz",
-                "us-commodities.gz",
-            ]
-            self.assertListEqual(expected, files)
+            files = set(os.listdir(db_path))
+            expected = {
+                "dynamic--us_meta.json",
+                "dynamic--us_auctions1.gz",
+                "dynamic--us_auctions2.gz",
+                "dynamic--us_commodities.gz",
+            }
+            self.assertSetEqual(expected, files)
 
     def test_parse_args(self):
         raw_args = [
             "--db_path",
             "db",
+            "--game_version",
+            "classic_wlk",
             "us",
         ]
         args = parse_args(raw_args)
-        self.assertEqual(args.region, "us")
+        self.assertEqual(args.region, RegionEnum.US)
         self.assertEqual(args.db_path, "db")
+        self.assertEqual(args.game_version, GameVersionEnum.CLASSIC_WLK)

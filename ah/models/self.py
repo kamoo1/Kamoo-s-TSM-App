@@ -13,10 +13,11 @@ from typing import (
     Union,
     Iterable,
     Set,
+    Any,
 )
 
 import numpy as np
-from pydantic import Field, validator, PrivateAttr
+from pydantic import Field, validator, PrivateAttr, root_validator
 
 from ah.protobuf.item_db_pb2 import (
     ItemDB,
@@ -26,6 +27,7 @@ from ah.protobuf.item_db_pb2 import (
 from ah.storage import BinaryFile
 from ah.models.base import _BaseModel, _BaseModelRootDictMixin, _BaseModelRootListMixin
 from ah.models.blizzard import (
+    Namespace,
     GenericAuctionsResponseInterface,
     GenericItemInterface,
     AuctionItem,
@@ -35,12 +37,16 @@ from ah.defs import SECONDS_IN
 from ah.data import map_bonuses
 
 __all__ = (
+    "DBTypeEnum",
+    "DBType",
+    "DBExtEnum",
+    "DBFileName",
     "MarketValueRecord",
     "MarketValueRecords",
+    "ItemStringTypeEnum",
+    "ItemString",
     "MapItemStringMarketValueRecords",
     "MapItemStringMarketValueRecord",
-    "ItemString",
-    "ItemStringTypeEnum",
 )
 
 """
@@ -64,6 +70,157 @@ data = {
     ...
 }
 """
+
+# TODO: apply these two Enums to the rest of the codebase
+
+
+class DBTypeEnum(str, Enum):
+    AUCTIONS = "auctions"
+    COMMODITIES = "commodities"
+    META = "meta"
+
+
+class DBType(_BaseModel):
+    type: DBTypeEnum
+    crid: Optional[int] = None
+
+    @root_validator(skip_on_failure=True)
+    def validate_root(cls, values: Dict[str, Any]):
+        if values["type"] == DBTypeEnum.AUCTIONS and values["crid"] is None:
+            raise ValueError("crid must not be None if type is AUCTIONS")
+
+        if (
+            values["type"] in (DBTypeEnum.COMMODITIES, DBTypeEnum.META)
+            and values["crid"] is not None
+        ):
+            raise ValueError("crid must be None if type is COMMODITIES or META")
+
+        return values
+
+    @classmethod
+    def from_str(cls, s: str) -> "DBType":
+        """
+        meta
+        commodities
+        auctions1234
+        """
+        if s == DBTypeEnum.META:
+            return cls(type=DBTypeEnum.META)
+
+        if s == DBTypeEnum.COMMODITIES:
+            return cls(type=DBTypeEnum.COMMODITIES)
+
+        if s.startswith(DBTypeEnum.AUCTIONS):
+            crid_str = s[len(DBTypeEnum.AUCTIONS) :]
+            try:
+                crid = int(crid_str)
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid {cls.__name__}: {s!r}, cannot parse crid."
+                ) from e
+
+            if str(crid) != crid_str:
+                raise ValueError(f"Invalid {cls.__name__}: {s!r}, illegal crid.")
+
+            if crid < 0:
+                raise ValueError(f"Invalid {cls.__name__}: {s!r}, crid must be >= 0.")
+
+            return cls(type=DBTypeEnum.AUCTIONS, crid=crid)
+
+        raise ValueError(f"Invalid {cls.__name__}: {s!r}")
+
+    def to_str(self) -> str:
+        if self.type == DBTypeEnum.AUCTIONS:
+            return f"{self.type}{self.crid}"
+
+        return self.type
+
+    def __str__(self):
+        return self.to_str()
+
+    def __repr__(self):
+        return f'"{self}"'
+
+    class Config(_BaseModel.Config):
+        frozen = True
+
+
+class DBExtEnum(str, Enum):
+    GZ = "gz"
+    BIN = "bin"
+    JSON = "json"
+
+
+class DBFileName(_BaseModel):
+    namespace: Namespace
+    db_type: DBType
+    ext: Optional[DBExtEnum] = None
+    SEP: ClassVar[str] = "_"
+    SEP_EXT: ClassVar[str] = "."
+
+    @validator("namespace", pre=True)
+    def validate_namespace(cls, v: Union[str, Namespace]):
+        if isinstance(v, str):
+            return Namespace.from_str(v)
+
+        return v
+
+    @validator("db_type", pre=True)
+    def validate_db_type(cls, v: Union[str, DBType]):
+        if isinstance(v, str):
+            return DBType.from_str(v)
+
+        return v
+
+    # `skip_on_failure = True`: fail fast if field validation fails, otherwise root
+    # validator will be called even if field validation fails (I don't know why this
+    # is the default behavior)
+    # https://docs.pydantic.dev/usage/validators/#root-validators
+    @root_validator(skip_on_failure=True)
+    def validate_root(cls, values: Dict[str, Any]):
+        if values["db_type"].type == DBTypeEnum.META:
+            if values["ext"] is None:
+                values["ext"] = DBExtEnum.JSON
+
+            if values["ext"] != DBExtEnum.JSON:
+                raise ValueError("ext must be JSON if db_type.type is META")
+
+        if values["db_type"].type in (
+            DBTypeEnum.AUCTIONS,
+            DBTypeEnum.COMMODITIES,
+        ) and values["ext"] not in (DBExtEnum.BIN, DBExtEnum.GZ):
+            raise ValueError(
+                "ext must be BIN or GZ when db_type.type is AUCTIONS or COMMODITIES"
+            )
+
+        return values
+
+    def is_compress(self) -> bool:
+        return self.ext == DBExtEnum.GZ
+
+    def to_str(self) -> str:
+        return f"{self.namespace}{self.SEP}{self.db_type}{self.SEP_EXT}{self.ext}"
+
+    @classmethod
+    def from_str(cls, name: str) -> "DBFileName":
+        name, ext = name.split(cls.SEP_EXT)
+        namespace, db_type = name.split(cls.SEP)
+        return cls(
+            namespace=Namespace.from_str(namespace),
+            db_type=DBType.from_str(db_type),
+            ext=DBExtEnum(ext),
+        )
+
+    def __str__(self):
+        return self.to_str()
+
+    def __repr__(self):
+        # wrapping quotes to repr sometimes confuses me misinterpreting
+        # it's a string.
+        return f'"{self}"'
+
+    class Config(_BaseModel.Config):
+        frozen = True
 
 
 @total_ordering
@@ -570,7 +727,7 @@ class ItemString(_BaseModel):
 
     def to_str(self) -> str:
         # TODO: extensive testing
-        if self.mods and self.mods[0] in ILVL_MODIFIERS_TYPES._value2member_map_:
+        if self.mods and self.mods[0] in (e.value for e in ILVL_MODIFIERS_TYPES):
             ilvl_key = self.mods[0]
             ilvl_val = self.mods[1]
             if ilvl_key == ILVL_MODIFIERS_TYPES.ABS_ILVL:
@@ -605,7 +762,7 @@ class ItemString(_BaseModel):
     def __repr__(self) -> str:
         return f"'{str(self)}'"
 
-    class Config:
+    class Config(_BaseModel.Config):
         frozen = True
 
 

@@ -21,9 +21,13 @@ class _BaseModel(BaseModel):
         return super().__init_subclass__()
 
     def dict(self, *args, **kwargs):
-        return super().dict(*args, **kwargs, exclude_none=True, by_alias=True)
+        kwargs["exclude_none"] = kwargs.get("exclude_none", True)
+        kwargs["by_alias"] = kwargs.get("by_alias", True)
+        return super().dict(*args, **kwargs)
 
     def json(self, *args, **kwargs):
+        kwargs["exclude_none"] = kwargs.get("exclude_none", True)
+        kwargs["by_alias"] = kwargs.get("by_alias", True)
         return super().json(*args, **kwargs, exclude_none=True, by_alias=True)
 
     class Config:

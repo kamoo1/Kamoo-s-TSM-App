@@ -1,7 +1,8 @@
+import sys
 import abc
 import time
 from enum import Enum
-from typing import List, Iterator, Literal, Union, Any, Dict, Optional
+from typing import List, Iterator, Literal, Union, Any, Dict, Optional, ClassVar
 
 from pydantic import Field, root_validator
 
@@ -9,7 +10,10 @@ from ah.models.base import _BaseModel
 from ah.api import BNAPI
 
 __all__ = (
-    "Region",
+    "RegionEnum",
+    "Namespace",
+    "NameSpaceCategoriesEnum",
+    "GameVersionEnum",
     "TimeLeft",
     "GenericItemInterface",
     "GenericAuctionInterface",
@@ -23,15 +27,60 @@ __all__ = (
 )
 
 
-class Region(str, Enum):
+class RegionEnum(str, Enum):
     US = "us"
     EU = "eu"
     KR = "kr"
     TW = "tw"
 
+
+class NameSpaceCategoriesEnum(str, Enum):
+    DYNAMIC = "dynamic"
+    STATIC = "static"
+
+
+if "unittest" in sys.modules:
+
+    class GameVersionEnum(str, Enum):
+        CLASSIC = "classic1x"
+        CLASSIC_WLK = "classic"
+        RETAIL = ""
+
+else:
+
+    class GameVersionEnum(str, Enum):
+        # CLASSIC = "classic1x"
+        # CLASSIC_WLK = "classic"
+        RETAIL = ""
+
+
+class Namespace(_BaseModel):
+    category: NameSpaceCategoriesEnum
+    game_version: GameVersionEnum
+    region: RegionEnum
+    SEP: ClassVar[str] = "-"
+
+    def to_str(self) -> str:
+        parts = [self.category, self.game_version, self.region]
+        return self.SEP.join([p for p in parts])
+
     @classmethod
-    def get_regex(cls) -> str:
-        return "|".join([r for r in cls])
+    def from_str(cls, ns: str) -> "Namespace":
+        parts = ns.split(cls.SEP)
+        if len(parts) == 3:
+            category, game_version, region = parts
+        else:
+            raise ValueError(f"Invalid namespace: {ns}")
+        return cls(category=category, game_version=game_version, region=region)
+
+    def __str__(self) -> str:
+        return self.to_str()
+
+    def __repr__(self) -> str:
+        return f'"{self}"'
+
+    class Config(_BaseModel.Config):
+        frozen = True
 
 
 class TimeLeft(str, Enum):
@@ -230,7 +279,7 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
 
     @classmethod
     def from_api(
-        cls, bn_api: BNAPI, region: Region, connected_realm_id: str
+        cls, bn_api: BNAPI, region: RegionEnum, connected_realm_id: str
     ) -> "AuctionsResponse":
         resp = bn_api.pull_auctions(region, connected_realm_id)
         return cls.parse_obj(resp)
@@ -306,7 +355,7 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
         return self.auctions
 
     @classmethod
-    def from_api(cls, bn_api: BNAPI, region: Region) -> "CommoditiesResponse":
+    def from_api(cls, bn_api: BNAPI, region: RegionEnum) -> "CommoditiesResponse":
         resp = bn_api.pull_commodities(region)
         return cls.parse_obj(resp)
 

@@ -4,8 +4,14 @@ import logging
 import sys
 import os
 
-
-from ah.models import MapItemStringMarketValueRecords, Region
+from ah.models import (
+    MapItemStringMarketValueRecords,
+    RegionEnum,
+    Namespace,
+    NameSpaceCategoriesEnum,
+    GameVersionEnum,
+    DBTypeEnum,
+)
 from ah.storage import TextFile
 from ah.db import AuctionDB
 from ah.api import GHAPI
@@ -76,8 +82,10 @@ class TSMExporter:
             ],
         },
     ]
-    TEMPLATE_ROW = 'select(2, ...).LoadData("{data_type}","{region_or_realm}",[[return {{downloadTime={ts},fields={{{fields}}},data={{{data}}}}}]])'
-    TEMPLATE_APPDATA = 'select(2, ...).LoadData("APP_INFO","Global",[[return {{version={version},lastSync={last_sync},message={{id=0,msg=""}},news={{}}}}]])'
+    TEMPLATE_ROW = 'select(2, ...).LoadData("{data_type}","{region_or_realm}",[[return '
+    "{{downloadTime={ts},fields={{{fields}}},data={{{data}}}}}]])"
+    TEMPLATE_APPDATA = 'select(2, ...).LoadData("APP_INFO","Global",[[return '
+    '{{version={version},lastSync={last_sync},message={{id=0,msg=""}},news={{}}}}]])'
     NUMERIC_SET = set("0123456789")
     TSM_VERSION = 41200
     _logger = logging.getLogger("TSMExporter")
@@ -201,26 +209,30 @@ class TSMExporter:
         with file.open("a", newline="\n", encoding="utf-8") as f:
             f.write(text_out + "\n")
 
-    def export_region(self, export_region_name: str, export_realm_name: Set[str]):
-        meta_file = self.db.get_meta_file(export_region_name)
+    def export_region(
+        self,
+        namespace: Namespace,
+        export_realms: Set[str],
+    ):
+        meta_file = self.db.get_file(namespace, DBTypeEnum.META)
         meta = self.db.load_meta(meta_file)
         if not meta:
             raise ValueError(f"meta file {meta_file} not found or Empty.")
         ts_update_start = meta["update"]["start_ts"]
         ts_update_end = meta["update"]["end_ts"]
-        connected_realms = meta["connected_realms"]
+        map_crid_connected_realms = meta["connected_realms"]
 
         # makes sure realm names are all valid
         all_realms = {
-            realm_name
-            for realm_names in connected_realms.values()
-            for realm_name in realm_names
+            realm
+            for connected_realms in map_crid_connected_realms.values()
+            for realm in connected_realms
         }
-        if not export_realm_name <= all_realms:
-            raise ValueError(f"invalid realm names: {export_realm_name - all_realms}. ")
+        if not export_realms <= all_realms:
+            raise ValueError(f"invalid realm names: {export_realms - all_realms}. ")
 
         region_auctions_commodities_data = MapItemStringMarketValueRecords()
-        commodity_file = self.db.get_db_file(export_region_name)
+        commodity_file = self.db.get_file(namespace, DBTypeEnum.COMMODITIES)
         commodity_data = self.db.load_db(commodity_file)
         if commodity_data:
             region_auctions_commodities_data.extend(commodity_data)
@@ -229,29 +241,29 @@ class TSMExporter:
                 commodity_data,
                 self.COMMODITIES_EXPORT["fields"],
                 self.COMMODITIES_EXPORT["type"],
-                export_region_name.upper(),
+                namespace.region.upper(),
                 ts_update_start,
                 ts_update_end,
             )
 
-        for connected_realm_id, connected_realm_names in connected_realms.items():
-            connected_realm_id = int(connected_realm_id)
-            connected_realm_names = set(connected_realm_names)
+        for crid, connected_realms in map_crid_connected_realms.items():
+            crid = int(crid)
+            connected_realms = set(connected_realms)
             # find all realm names we want to export under this connected realm,
             # they share the same auction data
-            sub_export_realm_name = export_realm_name & connected_realm_names
-            db_file = self.db.get_db_file(export_region_name, connected_realm_id)
+            sub_export_realms = export_realms & connected_realms
+            db_file = self.db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=crid)
             auction_data = self.db.load_db(db_file)
             if not auction_data:
                 continue
 
-            for name in sub_export_realm_name:
+            for realm in sub_export_realms:
                 self.export_append_data(
                     self.export_file,
                     auction_data,
                     self.REALM_AUCTIONS_EXPORT["fields"],
                     self.REALM_AUCTIONS_EXPORT["type"],
-                    name,
+                    realm,
                     ts_update_start,
                     ts_update_end,
                 )
@@ -262,13 +274,13 @@ class TSMExporter:
             region_auctions_commodities_data.extend(auction_data)
 
             for export_realm in self.REALM_AUCTIONS_COMMODITIES_EXPORTS:
-                for name in sub_export_realm_name:
+                for realm in sub_export_realms:
                     self.export_append_data(
                         self.export_file,
                         realm_auctions_commodities_data,
                         export_realm["fields"],
                         export_realm["type"],
-                        name,
+                        realm,
                         ts_update_start,
                         ts_update_end,
                     )
@@ -280,7 +292,7 @@ class TSMExporter:
                     region_auctions_commodities_data,
                     region_export["fields"],
                     region_export["type"],
-                    export_region_name.upper(),
+                    namespace.region.upper(),
                     ts_update_start,
                     ts_update_end,
                 )
@@ -302,9 +314,10 @@ class TSMExporter:
 def main(
     db_path: str = None,
     repo: str = None,
-    export_region: Region = None,
-    export_realms: Set[str] = None,
+    game_version: GameVersionEnum = None,
     export_path: str = None,
+    export_region: RegionEnum = None,
+    export_realms: Set[str] = None,
     cache: Cache = None,
 ):
     if cache is None:
@@ -327,21 +340,27 @@ def main(
         gh_api,
     )
 
+    namespace = Namespace(
+        category=NameSpaceCategoriesEnum.DYNAMIC,
+        game_version=game_version,
+        region=export_region,
+    )
     export_file = TextFile(export_path)
     exporter = TSMExporter(db, export_file)
     exporter.export_file.remove()
-    exporter.export_region(export_region, export_realms)
+    exporter.export_region(namespace, export_realms)
 
 
 def parse_args(raw_args):
     parser = argparse.ArgumentParser()
-    default_db_path = "./db"
+    default_db_path = config.DEFAULT_DB_PATH
+    default_game_version = GameVersionEnum.RETAIL.name.lower()
     default_export_path = TSMExporter.get_tsm_export_path()
     parser.add_argument(
         "--db_path",
         type=str,
         default=default_db_path,
-        help=f"path to the database, default: {default_db_path}",
+        help=f"path to the database, default: {default_db_path!r}",
     )
     parser.add_argument(
         "--repo",
@@ -352,14 +371,20 @@ def parse_args(raw_args):
         "Note: local db will be overwritten.",
     )
     parser.add_argument(
+        "--game_version",
+        choices={e.name.lower() for e in GameVersionEnum},
+        default=default_game_version,
+        help=f"Game version to export, default: {default_game_version!r}",
+    )
+    parser.add_argument(
         "--export_path",
         type=str,
         default=default_export_path,
-        help=f"Path to export TSM data, default: {default_export_path}",
+        help=f"Path to export TSM data, default: {default_export_path!r}",
     )
     parser.add_argument(
         "export_region",
-        type=str,
+        choices={e.value for e in RegionEnum},
         help="Region to export",
     )
     parser.add_argument(
@@ -369,12 +394,14 @@ def parse_args(raw_args):
         help="Realms to export, separated by space.",
     )
     args = parser.parse_args(raw_args)
+    args.game_version = GameVersionEnum[args.game_version.upper()]
     if not args.export_path:
         raise ValueError(
             "Unable to locate TSM's auction data path, please specify it manually with"
             " --export_path. (should be something like '"
             "%warcraft%/Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua')"
         )
+    args.export_region = RegionEnum(args.export_region)
     args.export_realms = set(args.export_realms)
     return args
 

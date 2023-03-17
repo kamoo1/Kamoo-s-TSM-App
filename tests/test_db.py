@@ -10,6 +10,13 @@ from ah.models import (
     MarketValueRecord,
     ItemString,
     ItemStringTypeEnum,
+    Namespace,
+    DBTypeEnum,
+    DBType,
+    NameSpaceCategoriesEnum,
+    GameVersionEnum,
+    DBFileName,
+    DBExtEnum,
 )
 
 
@@ -19,6 +26,8 @@ class DummyGHAPI:
     def __init__(
         self,
         site: str,
+        category: NameSpaceCategoriesEnum,
+        game_version: GameVersionEnum,
         region: str,
         n_crid: int,
         n_item: int,
@@ -26,6 +35,8 @@ class DummyGHAPI:
         ts_base: int,
     ) -> None:
         self.site = site
+        self.category = category
+        self.game_version = game_version
         self.region = region
         self.n_crid = n_crid
         db = MapItemStringMarketValueRecords()
@@ -51,14 +62,26 @@ class DummyGHAPI:
 
     def get_assets_uri(self, owner, repo):
         ret = {}
-        for n in range(self.n_crid):
-            file_name = AuctionDB.FN_CRID_AUCTIONS.format(
-                region=self.region, crid=n, suffix="gz"
-            )
-            ret[file_name] = f"{self.site}/{file_name}"
+        namespace = Namespace(
+            category=self.category,
+            game_version=self.game_version,
+            region=self.region,
+        )
 
-        meta_file_name = AuctionDB.FN_META.format(region=self.region)
-        ret[meta_file_name] = f"{self.site}/{meta_file_name}"
+        for n in range(self.n_crid):
+            file_name = DBFileName(
+                namespace=namespace,
+                db_type=DBType(type=DBTypeEnum.AUCTIONS, crid=n),
+                ext=DBExtEnum.GZ,
+            )
+            ret[str(file_name)] = f"{self.site}/{file_name}"
+
+        meta_file_name = DBFileName(
+            namespace=namespace,
+            db_type=DBTypeEnum.META,
+            ext=DBExtEnum.JSON,
+        )
+        ret[str(meta_file_name)] = f"{self.site}/{meta_file_name}"
         return ret
 
     def get_asset(self, url: str) -> bytes:
@@ -89,7 +112,16 @@ class TestAuctionDB(TestCase):
         site = "https://example.com"
         region = "us"
         ts_base = 1000
-        gh_api = DummyGHAPI(site, region, 2, 2, 2, ts_base)
+        gh_api = DummyGHAPI(
+            site,
+            NameSpaceCategoriesEnum.DYNAMIC,
+            GameVersionEnum.CLASSIC_WLK,
+            region,
+            2,
+            2,
+            2,
+            ts_base,
+        )
         fork_repo = "github.com/user/repo"
 
         # expires time too short
@@ -155,13 +187,20 @@ class TestAuctionDB(TestCase):
     def assert_db(
         self,
         db: AuctionDB,
+        category: NameSpaceCategoriesEnum,
+        game_version: GameVersionEnum,
         region: str,
         n_crid: int,
         n_item: int,
         n_record_per_item: int,
     ):
+        namespace = Namespace(
+            category=category,
+            game_version=game_version,
+            region=region,
+        )
         for crid in range(n_crid):
-            file = db.get_db_file(region, crid)
+            file = db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=crid)
             map_records = db.load_db(file)
             self.assertEqual(len(map_records), n_item)
             for item_string in map_records:
@@ -178,7 +217,23 @@ class TestAuctionDB(TestCase):
         region = "us"
         n_crid = n_item = n_record_per_item = 2
         ts_base = 1000
-        gh_api = DummyGHAPI(site, region, n_crid, n_item, n_record_per_item, ts_base)
+        category = NameSpaceCategoriesEnum.STATIC
+        game_version = GameVersionEnum.CLASSIC
+        namespace = Namespace(
+            category=category,
+            game_version=game_version,
+            region=region,
+        )
+        gh_api = DummyGHAPI(
+            site,
+            category,
+            game_version,
+            region,
+            n_crid,
+            n_item,
+            n_record_per_item,
+            ts_base,
+        )
 
         db = AuctionDB(
             db_path,
@@ -188,10 +243,12 @@ class TestAuctionDB(TestCase):
             fork_repo=fork_repo,
             gh_api=gh_api,
         )
-        self.assert_db(db, region, n_crid, n_item, n_record_per_item)
+        self.assert_db(
+            db, category, game_version, region, n_crid, n_item, n_record_per_item
+        )
 
         # test meta file
-        meta_file = db.get_meta_file(region)
+        meta_file = db.get_file(namespace, DBTypeEnum.META)
         meta = db.load_meta(meta_file)
         self.assertEqual(meta["duration"], 1)
 
@@ -200,11 +257,11 @@ class TestAuctionDB(TestCase):
 
         # pick one of the db file for testing
         pick_crid = n_crid - 1
-        pick_file = db.get_db_file(region, pick_crid)
+        pick_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, pick_crid)
         pick_map = db.load_db(pick_file)
 
         # assert raises when file not in remote
-        bad_file = db.get_db_file(region + "that_not_exist", pick_crid)
+        bad_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, n_crid + 1)
         self.assertRaises(FileNotFoundError, db.fork_file, bad_file)
         self.assertFalse(db.load_db(bad_file))  # return empty map
 
@@ -241,7 +298,9 @@ class TestAuctionDB(TestCase):
         )
         pick_map_ = db.load_db(pick_file)
         self.assertEqual(len(pick_map_), n_item)
-        self.assert_db(db, region, n_crid, n_item, n_record_per_item)
+        self.assert_db(
+            db, category, game_version, region, n_crid, n_item, n_record_per_item
+        )
 
     def test_mode_local_remote(self):
         mode = AuctionDB.MODE_LOCAL_REMOTE_RW
@@ -254,7 +313,23 @@ class TestAuctionDB(TestCase):
         region = "us"
         n_crid = n_item = n_record_per_item = 2
         ts_base = 1000
-        gh_api = DummyGHAPI(site, region, n_crid, n_item, n_record_per_item, ts_base)
+        category = NameSpaceCategoriesEnum.STATIC
+        game_version = GameVersionEnum.CLASSIC
+        namespace = Namespace(
+            category=category,
+            game_version=game_version,
+            region=region,
+        )
+        gh_api = DummyGHAPI(
+            site,
+            category,
+            game_version,
+            region,
+            n_crid,
+            n_item,
+            n_record_per_item,
+            ts_base,
+        )
 
         db = AuctionDB(
             db_path,
@@ -264,11 +339,13 @@ class TestAuctionDB(TestCase):
             fork_repo=fork_repo,
             gh_api=gh_api,
         )
-        self.assert_db(db, region, n_crid, n_item, n_record_per_item)
+        self.assert_db(
+            db, category, game_version, region, n_crid, n_item, n_record_per_item
+        )
 
         # pick one of the db file for testing
         pick_crid = n_crid - 1
-        pick_file = db.get_db_file(region, pick_crid)
+        pick_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=pick_crid)
 
         # update local
         new_item_string = ItemString(
@@ -291,7 +368,7 @@ class TestAuctionDB(TestCase):
         self.assertEqual(len(pick_map), n_item + 1)
 
         # update meta file
-        meta_file = db.get_meta_file(region)
+        meta_file = db.get_file(namespace, DBTypeEnum.META)
         db.update_meta(meta_file, {"start_ts": 2, "end_ts": 3, "duration": 1})
 
         # assert local changes are kept
@@ -318,6 +395,13 @@ class TestAuctionDB(TestCase):
         expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
         compress = True
         region = "tw"
+        category = NameSpaceCategoriesEnum.DYNAMIC
+        game_version = GameVersionEnum.CLASSIC
+        namespace = Namespace(
+            category=category,
+            game_version=game_version,
+            region=region,
+        )
 
         db = AuctionDB(
             db_path,
@@ -325,11 +409,11 @@ class TestAuctionDB(TestCase):
             compress,
             mode,
         )
-        self.assert_db(db, region, 0, 0, 0)
+        self.assert_db(db, category, game_version, region, 0, 0, 0)
 
         # pick one of the db file for testing
         pick_crid = 1
-        pick_file = db.get_db_file(region, pick_crid)
+        pick_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=pick_crid)
         pick_item_id = 1
         pick_ts = 1000
 
@@ -374,7 +458,23 @@ class TestAuctionDB(TestCase):
         region = "us"
         n_crid = n_item = n_record_per_item = 2
         ts_base = 1000
-        gh_api = DummyGHAPI(site, region, n_crid, n_item, n_record_per_item, ts_base)
+        category = NameSpaceCategoriesEnum.DYNAMIC
+        game_version = GameVersionEnum.RETAIL
+        gh_api = DummyGHAPI(
+            site,
+            category,
+            game_version,
+            region,
+            n_crid,
+            n_item,
+            n_record_per_item,
+            ts_base,
+        )
+        namespace = Namespace(
+            category=category,
+            game_version=game_version,
+            region=region,
+        )
 
         db = AuctionDB(
             db_path,
@@ -384,33 +484,25 @@ class TestAuctionDB(TestCase):
             fork_repo=fork_repo,
             gh_api=gh_api,
         )
-        self.assert_db(db, region, n_crid, n_item, n_record_per_item)
+        self.assert_db(
+            db, category, game_version, region, n_crid, n_item, n_record_per_item
+        )
 
         pick_crid = n_crid - 1
-        pick_file = db.get_db_file(region, pick_crid)
+        pick_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=pick_crid)
         pick_map = db.load_db(pick_file)
         pick_map_ = db.load_db(pick_file.file_name)
         self.assertEqual(pick_map.to_protobuf_bytes(), pick_map_.to_protobuf_bytes())
 
-    def test_validate_db_name(self):
-        v = AuctionDB.validate_db_name
-        self.assertFalse(v("us-auctions.gz"))
-        self.assertFalse(v("us-0-auctions.gz "))
-        self.assertFalse(v(" us-0-auctions.gz"))
-        self.assertFalse(v("us-0-auctions.bin.gz"))
-        self.assertTrue(v("us-0-auctions.gz"))
-        self.assertTrue(v("us-0-auctions.bin"))
-
-        self.assertFalse(v("us-0-commodities.gz"))
-        self.assertFalse(v(" us-commodities.gz"))
-        self.assertFalse(v("us-commodities.gz "))
-        self.assertFalse(v("us-commodities.bin.gz"))
-        self.assertTrue(v("us-commodities.gz"))
-        self.assertTrue(v("us-commodities.bin"))
-
     @classmethod
     def make_db_file(cls, db, region, crid):
-        db_file = db.get_db_file(region, crid)
+        namespace = Namespace(
+            category=NameSpaceCategoriesEnum.DYNAMIC,
+            game_version=GameVersionEnum.CLASSIC,
+            region=region,
+        )
+        db_type_e = DBTypeEnum.AUCTIONS
+        db_file = db.get_file(namespace, db_type_e, crid)
         db_file.touch()
         return db_file.file_name
 
@@ -434,4 +526,4 @@ class TestAuctionDB(TestCase):
             fn = self.make_db_file(db, region, crid)
             expected.add(fn)
 
-        self.assertEqual(set(db.list_db_name()), expected)
+        self.assertEqual(set(db.list_file()), expected)
