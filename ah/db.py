@@ -48,24 +48,24 @@ class AuctionDB:
     ) -> "AuctionDB":
         if records_expires_in < self.MIN_RECORDS_EXPIRES_IN:
             raise ValueError(
-                f"records_expires_in must be at least {self.MIN_RECORDS_EXPIRES_IN}"
+                f"records_expires_in must be at least {self.MIN_RECORDS_EXPIRES_IN!r}"
             )
         if mode not in (
             self.MODE_LOCAL_RW,
             self.MODE_LOCAL_REMOTE_RW,
             self.MODE_REMOTE_R,
         ):
-            raise ValueError(f"Invalid mode: {mode}")
+            raise ValueError(f"Invalid mode: {mode!r}")
 
         if mode in (self.MODE_LOCAL_REMOTE_RW, self.MODE_REMOTE_R):
             if not (fork_repo and gh_api):
                 # verify fork_repo with REPO_MATCHER
                 raise ValueError(
-                    f"fork_repo and gh_api must be provided when mode is {mode}"
+                    f"fork_repo and gh_api must be provided when mode is {mode!r}"
                 )
 
             if not self.validate_repo(fork_repo):
-                raise ValueError(f"Invalid fork_repo: {fork_repo}")
+                raise ValueError(f"Invalid fork_repo: {fork_repo!r}")
 
         self._logger = logging.getLogger(self.__class__.__name__)
         self.data_path = data_path
@@ -119,21 +119,21 @@ class AuctionDB:
             assets = self.pull_assets_url()
         except Exception as e:
             raise RuntimeError(
-                f"Failed to download asset map from {self.fork_repo}"
+                f"Failed to download asset map from {self.fork_repo!r}"
             ) from e
 
         if file.file_name not in assets:
-            raise FileNotFoundError(f"File not listed in assets: {file.file_name}")
+            raise FileNotFoundError(f"File not listed in assets: {file.file_name!r}")
 
         asset_url = assets[file.file_name]
+        self._logger.info(f"Downloading asset {file.file_name!r} from {asset_url!r}")
         try:
             asset_data = self.pull_asset(asset_url)
         except Exception as e:
             raise RuntimeError(
-                f"Failed to download asset {file.file_name} from {asset_url}"
+                f"Failed to download asset {file.file_name!r} from {asset_url!r}"
             ) from e
 
-        self._logger.info(f"Downloaded asset {file.file_name} from {asset_url}")
 
         # we don't want it to be compressed multiple times
         # since we're essentially doing a copy here.
@@ -149,7 +149,7 @@ class AuctionDB:
 
     @singledispatchmethod
     def load_db(self, file) -> "MapItemStringMarketValueRecords":
-        raise NotImplementedError(f"load_db not implemented for {type(file)}")
+        raise NotImplementedError(f"load_db not implemented for {type(file)!r}")
 
     @load_db.register
     def _(self, file: BinaryFile) -> "MapItemStringMarketValueRecords":
@@ -231,7 +231,7 @@ class AuctionDB:
                 self.fork_file(file)
             except Exception:
                 self._logger.exception(
-                    f"Failed to download {file.file_name} from {self.fork_repo}"
+                    f"Failed to download {file.file_name!r} from {self.fork_repo!r}"
                 )
 
     def load_meta(self, file: TextFile) -> Dict[str, Any]:
@@ -250,7 +250,7 @@ class AuctionDB:
         meta: Dict,
     ) -> None:
         if self.mode == self.MODE_REMOTE_R:
-            raise ValueError(f"Invalid mode for update_meta: {self.mode}")
+            raise ValueError(f"Invalid mode for update_meta: {self.mode!r}")
 
         content = json.dumps(meta)
         with file.open("w") as f:
