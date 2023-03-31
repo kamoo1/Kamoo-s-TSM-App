@@ -82,10 +82,15 @@ class TSMExporter:
             ],
         },
     ]
-    TEMPLATE_ROW = 'select(2, ...).LoadData("{data_type}","{region_or_realm}",[[return '
-    "{{downloadTime={ts},fields={{{fields}}},data={{{data}}}}}]])"
-    TEMPLATE_APPDATA = 'select(2, ...).LoadData("APP_INFO","Global",[[return '
-    '{{version={version},lastSync={last_sync},message={{id=0,msg=""}},news={{}}}}]])'
+    TEMPLATE_ROW = (
+        'select(2, ...).LoadData("{data_type}","{region_or_realm}",[[return '
+        "{{downloadTime={ts},fields={{{fields}}},data={{{data}}}}}]])"
+    )
+    TEMPLATE_APPDATA = (
+        'select(2, ...).LoadData("APP_INFO","Global",[[return '
+        "{{version={version},lastSync={last_sync},"
+        'message={{id=0,msg=""}},news={{}}}}]])'
+    )
     NUMERIC_SET = set("0123456789")
     TSM_VERSION = 41200
     _logger = logging.getLogger("TSMExporter")
@@ -314,17 +319,20 @@ class TSMExporter:
 def main(
     db_path: str = None,
     repo: str = None,
+    gh_proxy: str = None,
     game_version: GameVersionEnum = None,
     export_path: str = None,
     export_region: RegionEnum = None,
     export_realms: Set[str] = None,
     cache: Cache = None,
+    gh_api: GHAPI = None,
 ):
-    if cache is None:
-        cache_path = config.DEFAULT_CACHE_PATH
-        cache = Cache(cache_path)
+    if gh_api is None:
+        if cache is None:
+            cache_path = config.DEFAULT_CACHE_PATH
+            cache = Cache(cache_path)
 
-    gh_api = GHAPI(cache)
+        gh_api = GHAPI(cache, gh_proxy=gh_proxy)
 
     if repo:
         mode = AuctionDB.MODE_REMOTE_R
@@ -369,6 +377,16 @@ def parse_args(raw_args):
         help="Address of Github repo that's hosting the db files. If given, "
         "download and use repo's db instead of local ones. "
         "Note: local db will be overwritten.",
+    )
+    parser.add_argument(
+        "--gh_proxy",
+        type=str,
+        default=None,
+        help="URL of Github proxy server, for people having trouble accessing Github "
+        "while using --repo option. "
+        "Read more at https://github.com/crazypeace/gh-proxy, "
+        "this program need a modified version that hosts API requests: "
+        "https://github.com/hunshcn/gh-proxy/issues/44",
     )
     parser.add_argument(
         "--game_version",

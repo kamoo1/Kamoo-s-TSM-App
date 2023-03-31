@@ -1,5 +1,6 @@
 import re
 import requests
+from requests.adapters import HTTPAdapter, Retry
 from typing import Optional, Dict, Any
 
 from ah.vendors.blizzardapi import BlizzardApi
@@ -161,16 +162,29 @@ class BNAPI:
 
 
 class GHAPI(BoundCacheMixin):
-    API_TEMPLATE = "https://api.github.com/repos/{user}/{repo}/releases/latest"
+    REQUESTS_KWARGS = {"timeout": 10}
 
-    def __init__(self, cache: Cache) -> None:
+    def __init__(self, cache: Cache, gh_proxy=None) -> None:
+        self.gh_proxy = gh_proxy
+        self.session = requests.Session()
+        retries = Retry(
+            total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
+        )
+        self.session.mount("https://", HTTPAdapter(max_retries=retries))
+        self.session.mount("http://", HTTPAdapter(max_retries=retries))
         super().__init__(cache=cache)
 
     @bound_cache(SECONDS_IN.HOUR)
     def get_assets_uri(self, owner: str, repo: str) -> Dict[str, str]:
-        resp = requests.get(f"https://api.github.com/repos/{owner}/{repo}/releases")
+        url = "https://api.github.com/repos/{user}/{repo}/releases"
+        if self.gh_proxy:
+            url = self.gh_proxy + url
+        resp = self.session.get(
+            url.format(user=owner, repo=repo),
+            **self.REQUESTS_KWARGS,
+        )
         if resp.status_code != 200:
-            raise ValueError(f"Failed to get releases: {resp.content}")
+            raise ValueError("Failed to get releases, code: {resp.status_code}")
         releases = resp.json()
         ret = {}
         for asset in releases[0]["assets"]:
@@ -180,7 +194,9 @@ class GHAPI(BoundCacheMixin):
 
     @bound_cache(SECONDS_IN.HOUR)
     def get_asset(self, url: str) -> bytes:
-        resp = requests.get(url)
+        if self.gh_proxy:
+            url = self.gh_proxy + url
+        resp = self.session.get(url, **self.REQUESTS_KWARGS)
         if resp.status_code != 200:
-            raise ValueError(f"Failed to get asset: {resp.content}")
+            raise ValueError("Failed to get releases, code: {resp.status_code}")
         return resp.content
