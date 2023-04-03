@@ -178,13 +178,14 @@ class GHAPI(BoundCacheMixin):
     def get_assets_uri(self, owner: str, repo: str) -> Dict[str, str]:
         url = "https://api.github.com/repos/{user}/{repo}/releases"
         if self.gh_proxy:
+            # TODO: make it safe to use url without trailing slash
             url = self.gh_proxy + url
         resp = self.session.get(
             url.format(user=owner, repo=repo),
             **self.REQUESTS_KWARGS,
         )
         if resp.status_code != 200:
-            raise ValueError("Failed to get releases, code: {resp.status_code}")
+            raise ValueError(f"Failed to get releases, code: {resp.status_code}")
         releases = resp.json()
         ret = {}
         for asset in releases[0]["assets"]:
