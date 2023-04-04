@@ -299,13 +299,37 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
     def empty(self):
         self.__root__ = []
 
-    def remove_expired(self, ts_expires: int) -> int:
-        for i in range(len(self) + 1):
-            if i == len(self) or self[i].timestamp > ts_expires:
-                break
+    def compress(self, ts_now: int, ts_expires_in: int) -> int:
+        """average all records in the range of 1 day down to 1 record,
+        the average sample range is `[mid_day - 12hr, mid_day + 12hr]`
+        the averaged record's timestamp is the mid_day.
+        """
+        # keep recent records that didn't span over a day
+        ts_end = ts_now - ts_now % SECONDS_IN.DAY
+        # round up so we don't miss any records
+        n_days = (ts_expires_in + SECONDS_IN.DAY - 1) // SECONDS_IN.DAY
+        comporessed_records = self.average_by_day(
+            self,
+            ts_end,
+            n_days,
+            return_compressed_record=True,
+        )
+        comporessed_records = (
+            record for record in comporessed_records if record is not None
+        )
+        n_before = len(self)
+        # remove records that gets compressed
+        self.remove_expired(ts_end)
+        # prepend compressed records
+        self.__root__ = [*comporessed_records, *self]
+        n_after = len(self)
+        return n_before - n_after
 
-        self.__root__ = self[i:]
-        return i
+    def remove_expired(self, ts_expires: int) -> int:
+        """remove records that are older than `ts_expires` (timestamp < ts_expires)"""
+        len_before = len(self)
+        self.__root__ = [record for record in self if record.timestamp >= ts_expires]
+        return len_before - len(self)
 
     def get_recent_num_auctions(self, ts_last_update_begin: int) -> int:
         # return newest record
@@ -343,8 +367,13 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
         ts_now: int,
         n_days_before: int,
         is_records_sorted: bool = True,
-    ) -> List[Union[float, None]]:
+        return_compressed_record: bool = False,
+    ) -> List[Union[MarketValueRecord, float, None]]:
         """
+        average range is (ts_now - n_days_before * SECONDS_IN.DAY, ts_now),
+        range end (ts_now) is exclusive following convention,
+        records with timestamp >= ts_now are ignored.
+
         note that records should be passed in ascending order
         """
         # 1. put market value snapshots into buckets of 1 day
@@ -352,12 +381,13 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
         for record in reversed(records):
             if record.market_value is None:
                 continue
-            i = (ts_now - record.timestamp) // SECONDS_IN.DAY
+            # every `n * SECONDS_IN.DAY` is the start of a new day
+            i = (ts_now - record.timestamp - 1) // SECONDS_IN.DAY
             if i < 0:
                 continue
 
             elif i < n_days_before:
-                buckets[i].append(record.market_value)
+                buckets[i].append(record)
 
             elif is_records_sorted:
                 # if records are sorted in descending order, we can stop
@@ -369,10 +399,29 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
         #    note that some buckets may be empty, indicated by `None` instead
         #    of an average.
         days_average = [None] * n_days_before
-        for i, market_values in buckets.items():
-            if market_values:
-                avg = sum(market_values) / len(market_values)
-                days_average[n_days_before - i - 1] = avg
+        for i, records in buckets.items():
+            if not records:
+                continue
+
+            day = n_days_before - i - 1
+            n_records = len(records)
+            avg_market_value = sum(r.market_value for r in records) / n_records
+            avg_market_value = int(avg_market_value + 0.5)
+
+            if return_compressed_record:
+                avg_num_auctions = sum(r.num_auctions for r in records) / n_records
+                avg_num_auctions = int(avg_num_auctions + 0.5)
+                min_min_buyout = min(record.min_buyout for record in records)
+                # mid-day timestamp
+                time_stamp = int(ts_now - (i + 0.5) * SECONDS_IN.DAY)
+                days_average[day] = MarketValueRecord(
+                    timestamp=time_stamp,
+                    market_value=avg_market_value,
+                    num_auctions=avg_num_auctions,
+                    min_buyout=min_min_buyout,
+                )
+            else:
+                days_average[day] = avg_market_value
 
         return days_average
 
@@ -1020,6 +1069,17 @@ class MapItemStringMarketValueRecords(
             n_removed_records += market_value_records.remove_expired(ts_expires)
 
         return n_removed_records
+
+    def compress(
+        self,
+        ts_now: int,
+        ts_expires_in: int,
+    ) -> int:
+        n_removed = 0
+        for market_value_records in self.values():
+            n_removed += market_value_records.compress(ts_now, ts_expires_in)
+
+        return n_removed
 
     def remove_empty_entries(self) -> int:
         n_removed_entries = 0

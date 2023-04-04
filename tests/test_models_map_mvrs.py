@@ -1,12 +1,15 @@
 from unittest import TestCase
+from tests.test_models_mvrs import TestModels as TestModelsMVRs
 
 from ah.models import (
+    MarketValueRecords,
     MapItemStringMarketValueRecord,
     MapItemStringMarketValueRecords,
     MarketValueRecord,
     ItemString,
     ItemStringTypeEnum,
 )
+from ah.defs import SECONDS_IN
 
 
 class TestModels(TestCase):
@@ -37,12 +40,12 @@ class TestModels(TestCase):
         self.assertEqual(s_na_ent, 1)
         NOW = 9
         # removes ts = 0, 1, 2
-        nr_rec = db.remove_expired(2)
+        nr_rec = db.remove_expired(3)
         self.assertEqual(nr_rec, 3)
         self.assertEqual(len(db[item_string]), 7)
         self.assertIn(item_string, db)
 
-        nr_rec = db.remove_expired(10)
+        nr_rec = db.remove_expired(11)
         nr_ent = db.remove_empty_entries()
         self.assertEqual(nr_ent, 1)
         self.assertEqual(nr_rec, 7)
@@ -267,3 +270,76 @@ class TestModels(TestCase):
         for recs in db.values():
             for rec in recs:
                 self.assertEqual(rec.market_value, 100)
+
+    def assert_compression(
+        self,
+        records: MarketValueRecords,
+        expected_compressed_records: MarketValueRecords,
+        expected_recent_records: MarketValueRecords,
+        ts_now: int,
+    ):
+        n_before = len(records)
+        n_removed = records.compress(ts_now, ts_expires_in=SECONDS_IN.DAY * 60)
+        n_after = len(records)
+        self.assertEqual(n_before, n_after + n_removed)
+        self.assertEqual(
+            len(records),
+            len(expected_compressed_records) + len(expected_recent_records),
+        )
+        for record, expected in zip(
+            records, [*expected_compressed_records, *expected_recent_records]
+        ):
+            self.assertEqual(record.timestamp, expected.timestamp)
+            self.assertEqual(record.market_value, expected.market_value)
+            self.assertEqual(record.num_auctions, expected.num_auctions)
+            self.assertEqual(record.min_buyout, expected.min_buyout)
+
+        # compress again, make sure result is the same
+        n_removed = records.compress(ts_now, ts_expires_in=SECONDS_IN.DAY * 60)
+        self.assertEqual(n_removed, 0)
+        self.assertEqual(
+            len(records),
+            len(expected_compressed_records) + len(expected_recent_records),
+        )
+        for record, expected in zip(
+            records, [*expected_compressed_records, *expected_recent_records]
+        ):
+            self.assertEqual(record.timestamp, expected.timestamp)
+            self.assertEqual(record.market_value, expected.market_value)
+            self.assertEqual(record.num_auctions, expected.num_auctions)
+            self.assertEqual(record.min_buyout, expected.min_buyout)
+
+    def test_compression(self):
+        db = MapItemStringMarketValueRecords()
+        expected = {}
+        for i in range(10):
+            ts_now = 1680528498 + SECONDS_IN.DAY // 3
+            (
+                records,
+                expected_compressed_records,
+                expected_recent_records,
+            ) = TestModelsMVRs.generate_records(ts_now, SECONDS_IN.DAY * 60)
+            item_string = ItemString(
+                type=ItemStringTypeEnum.PET,
+                id=i,
+                bonuses=None,
+                mods=None,
+            )
+            db[item_string] = records
+            expected[item_string] = (
+                expected_compressed_records,
+                expected_recent_records,
+                ts_now,
+            )
+
+        for item_string, (
+            expected_compressed_records,
+            expected_recent_records,
+            ts_now,
+        ) in expected.items():
+            self.assert_compression(
+                db[item_string],
+                expected_compressed_records,
+                expected_recent_records,
+                ts_now,
+            )

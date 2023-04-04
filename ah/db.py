@@ -92,6 +92,7 @@ class AuctionDB:
         records_map = self.load_db(file)
         n_added_records, n_added_entries = records_map.update_increment(increment)
         n_removed_records = records_map.remove_expired(ts_now - self.records_expires_in)
+        n_removed_records += records_map.compress(ts_now, self.records_expires_in)
         records_map.to_file(file)
         self._logger.info(
             f"DB update: {file.file_path}, {n_added_records=} "
