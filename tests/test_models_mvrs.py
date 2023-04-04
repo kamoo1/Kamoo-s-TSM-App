@@ -1,15 +1,9 @@
 from unittest import TestCase
-import random
 from math import gcd
 
 from ah.models import (
-    MapItemStringMarketValueRecords,
     MarketValueRecord,
     MarketValueRecords,
-    ItemString,
-    ItemStringTypeEnum,
-    AuctionItem,
-    CommodityItem,
 )
 from ah.defs import SECONDS_IN
 
@@ -23,7 +17,7 @@ class TestModels(TestCase):
         # 4 records per day
         record_list = (
             MarketValueRecord(
-                timestamp=SECONDS_IN.DAY * ((i + 1) / RECORDS_PER_DAY),
+                timestamp=SECONDS_IN.DAY * (i / RECORDS_PER_DAY),
                 market_value=100 * ((i + RECORDS_PER_DAY) // RECORDS_PER_DAY),
                 num_auctions=100,
                 min_buyout=1,
@@ -237,7 +231,7 @@ class TestModels(TestCase):
         for mvr in record_list:
             records.add(mvr, sort=False)
 
-        NOW = SECONDS_IN.DAY * (N_DAYS - 1)
+        NOW = SECONDS_IN.DAY * (N_DAYS - 1) + 1
         self.assertEqual(
             records.get_weighted_market_value(NOW),
             int(weight_lcm * N_DAYS / sum(MarketValueRecords.DAY_WEIGHTS) + 0.5),
@@ -261,15 +255,15 @@ class TestModels(TestCase):
         self.assertEqual(len(records), 10)
         self.assertEqual(records[0].market_value, 0)
 
-        records.remove_expired(5)
+        records.remove_expired(6)
         self.assertEqual(len(records), 4)
         self.assertEqual(records[0].market_value, 60)
 
-        records.remove_expired(8)
+        records.remove_expired(9)
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].market_value, 90)
 
-        records.remove_expired(9)
+        records.remove_expired(10)
         self.assertEqual(len(records), 0)
 
         record_list = (
@@ -286,3 +280,129 @@ class TestModels(TestCase):
 
         records.remove_expired(100)
         self.assertEqual(len(records), 0)
+
+    @classmethod
+    def generate_records(
+        cls,
+        ts_now: int,
+        ts_expires_in: int,
+        n_expired: int = 10,
+        n_recent: int = 10,
+    ):
+        """
+        make series of records consisting of
+        1. expired records
+        2. records that will get compressed into n days
+        3. recent records that will not get compressed
+
+        compress
+        """
+
+        assert ts_now % SECONDS_IN.DAY >= n_recent
+        records = MarketValueRecords()
+        ts_end = ts_now - ts_now % SECONDS_IN.DAY
+        # round up to day
+        n_days = (ts_expires_in + SECONDS_IN.DAY - 1) // SECONDS_IN.DAY
+        ts_start = ts_end - n_days * SECONDS_IN.DAY
+        # anything before ts_start will be expired
+        # anything after ts_end (recent records within a day) will not be compressed
+        # how many records for each day in the compressed range
+        n_records_per_day = 8
+        n_compressed = n_days * n_records_per_day
+        assert SECONDS_IN.DAY % n_records_per_day == 0
+
+        # put expired records (ts_start - n_expired, ts_start)
+        expired_records = [
+            MarketValueRecord(
+                timestamp=ts_start - n,
+                market_value=1,
+                num_auctions=1,
+                min_buyout=1,
+            )
+            for n in range(n_expired, 0, -1)
+        ]
+
+        # put records that will be compressed (ts_start, ts_end)
+        to_compressed_records = []
+        expected_compressed_records = []
+        last_compressed_num_auctions = 0
+        last_compressed_market_value = 0
+        last_day = -1
+        for ts in range(ts_start, ts_end, SECONDS_IN.DAY // n_records_per_day):
+            # range(0, n_days)
+            n_th_day = (ts - ts_start) // SECONDS_IN.DAY
+            # range(0, n_records_per_day)
+            n_th_record = (ts % SECONDS_IN.DAY) // (SECONDS_IN.DAY // n_records_per_day)
+            to_compressed_records.append(
+                MarketValueRecord(
+                    # compressed value would be the mid day timestamp of that day
+                    # timestamp = ts_start + \
+                    #   int(n_th_day * SECONDS_IN.DAY + SECONDS_IN.DAY // 2)
+                    timestamp=ts,
+                    # compressed value would be the average
+                    # market_value = n_th_day * 100 + n_records_per_day / 2
+                    market_value=100 * n_th_day + n_th_record,
+                    # compressed value would be the average
+                    # num_auctions = n_th_day * 10 + n_records_per_day / 2
+                    num_auctions=10 * n_th_day + n_th_record,
+                    # compressed value would be the min
+                    # min_buyout = 0
+                    min_buyout=1000 * n_th_day + n_th_record,
+                )
+            )
+
+            # for generating edge record, it won't affect the compressed value
+            # of num_auctions and market_value, but min_buyout will set to 0
+            if n_th_day != last_day:
+                last_day = n_th_day
+                last_compressed_num_auctions = 10 * n_th_day + n_records_per_day / 2
+                last_compressed_market_value = 100 * n_th_day + n_records_per_day / 2
+                last_compressed_num_auctions = int(last_compressed_num_auctions + 0.5)
+                last_compressed_market_value = int(last_compressed_market_value + 0.5)
+                # calculate expected compressed records
+                expected_compressed_records.append(
+                    MarketValueRecord(
+                        timestamp=ts_start
+                        + int(n_th_day * SECONDS_IN.DAY + SECONDS_IN.DAY // 2),
+                        market_value=last_compressed_market_value,
+                        num_auctions=last_compressed_num_auctions,
+                        min_buyout=1000 * n_th_day,
+                    )
+                )
+
+        # we'd also like to add a edge case where the last record is
+        # exactly ts_end - 1, to make sure we don't miss it
+        edge_record = MarketValueRecord(
+            timestamp=ts_end - 1,
+            market_value=last_compressed_market_value,
+            num_auctions=last_compressed_num_auctions,
+            min_buyout=0,
+        )
+        expected_compressed_records[-1].min_buyout = 0
+
+        # put records that will not be compressed (ts_end, ts_now)
+        recent_records = [
+            MarketValueRecord(
+                timestamp=n,
+                market_value=1,
+                num_auctions=1,
+                min_buyout=1,
+            )
+            for n in range(ts_end, ts_now, (ts_now - ts_end) // n_recent)
+        ]
+        if len(recent_records) > n_recent:
+            # it's usually n_recent + 1
+            recent_records = recent_records[:n_recent]
+
+        expected_recent_records = [r.copy(deep=True) for r in recent_records]
+
+        records = MarketValueRecords(
+            __root__=[
+                *expired_records,
+                *to_compressed_records,
+                edge_record,
+                *recent_records,
+            ]
+        )
+
+        return records, expected_compressed_records, expected_recent_records
