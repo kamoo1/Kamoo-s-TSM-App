@@ -43,6 +43,5 @@ python -m ah.tsm_exporter --repo https://github.com/kamoo1/TSM-Backend tw {realm
 ```
 
 ## Future Plans
-- [ ] Average historical records by day to reduce database size.
-- [ ] Multiprocessing for faster updates and saving Github Actions quota.
+- [x] Average historical records by day to reduce database size.
 - [ ] Add Classic and Classic WLK support.
