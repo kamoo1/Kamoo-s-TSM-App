@@ -2,6 +2,8 @@ from functools import partial
 from enum import Enum
 from heapq import heappush, heappop
 from collections import defaultdict
+from logging import Logger, getLogger
+from copy import deepcopy
 from functools import total_ordering, lru_cache
 from typing import (
     List,
@@ -13,11 +15,10 @@ from typing import (
     Union,
     Iterable,
     Set,
-    Any,
 )
 
 import numpy as np
-from pydantic import Field, validator, PrivateAttr, root_validator
+from attrs import define, field, Factory
 
 from ah.protobuf.item_db_pb2 import (
     ItemDB,
@@ -25,7 +26,11 @@ from ah.protobuf.item_db_pb2 import (
     ItemStringType as ItemStringTypePB,
 )
 from ah.storage import BinaryFile
-from ah.models.base import _BaseModel, _BaseModelRootDictMixin, _BaseModelRootListMixin
+from ah.models.base import (
+    _RootDictMixin,
+    _RootListMixin,
+    ConverterWrapper as CW,
+)
 from ah.models.blizzard import (
     Namespace,
     GenericAuctionsResponseInterface,
@@ -71,8 +76,6 @@ data = {
 }
 """
 
-# TODO: apply these two Enums to the rest of the codebase
-
 
 class DBTypeEnum(str, Enum):
     AUCTIONS = "auctions"
@@ -80,22 +83,24 @@ class DBTypeEnum(str, Enum):
     META = "meta"
 
 
-class DBType(_BaseModel):
-    type: DBTypeEnum
+@define(kw_only=True, frozen=True)
+class DBType:
+    _logger: ClassVar[Logger] = getLogger("DBType")
+    type: DBTypeEnum = field(converter=CW.norm(DBTypeEnum))
     crid: Optional[int] = None
 
-    @root_validator(skip_on_failure=True)
-    def validate_root(cls, values: Dict[str, Any]):
-        if values["type"] == DBTypeEnum.AUCTIONS and values["crid"] is None:
+    def __attrs_post_init__(self):
+        self.validate_root()
+
+    def validate_root(self):
+        if self.type == DBTypeEnum.AUCTIONS and self.crid is None:
             raise ValueError("crid must not be None if type is AUCTIONS")
 
         if (
-            values["type"] in (DBTypeEnum.COMMODITIES, DBTypeEnum.META)
-            and values["crid"] is not None
+            self.type in (DBTypeEnum.COMMODITIES, DBTypeEnum.META)
+            and self.crid is not None
         ):
             raise ValueError("crid must be None if type is COMMODITIES or META")
-
-        return values
 
     @classmethod
     def from_str(cls, s: str) -> "DBType":
@@ -141,9 +146,6 @@ class DBType(_BaseModel):
     def __repr__(self):
         return f'"{self}"'
 
-    class Config(_BaseModel.Config):
-        frozen = True
-
 
 class DBExtEnum(str, Enum):
     GZ = "gz"
@@ -151,49 +153,35 @@ class DBExtEnum(str, Enum):
     JSON = "json"
 
 
-class DBFileName(_BaseModel):
-    namespace: Namespace
-    db_type: DBType
-    ext: Optional[DBExtEnum] = None
+@define(kw_only=True, frozen=True)
+class DBFileName:
+    _logger: ClassVar[Logger] = getLogger("DBFileName")
+    namespace: Namespace = field(converter=CW.norm(Namespace.from_str, Namespace))
+    db_type: DBType = field(converter=CW.norm(DBType.from_str, DBType))
+    ext: Optional[DBExtEnum] = field(
+        default=None, converter=CW.optional(CW.norm(DBExtEnum))
+    )
     SEP: ClassVar[str] = "_"
     SEP_EXT: ClassVar[str] = "."
 
-    @validator("namespace", pre=True)
-    def validate_namespace(cls, v: Union[str, Namespace]):
-        if isinstance(v, str):
-            return Namespace.from_str(v)
+    def __attrs_post_init__(self) -> None:
+        self.validate_root()
 
-        return v
+    def validate_root(self):
+        if self.db_type.type == DBTypeEnum.META:
+            if self.ext is None:
+                # self.ext = DBExtEnum.JSON
+                object.__setattr__(self, "ext", DBExtEnum.JSON)
 
-    @validator("db_type", pre=True)
-    def validate_db_type(cls, v: Union[str, DBType]):
-        if isinstance(v, str):
-            return DBType.from_str(v)
-
-        return v
-
-    # `skip_on_failure = True`: fail fast if field validation fails, otherwise root
-    # validator will be called even if field validation fails (I don't know why this
-    # is the default behavior)
-    # https://docs.pydantic.dev/usage/validators/#root-validators
-    @root_validator(skip_on_failure=True)
-    def validate_root(cls, values: Dict[str, Any]):
-        if values["db_type"].type == DBTypeEnum.META:
-            if values["ext"] is None:
-                values["ext"] = DBExtEnum.JSON
-
-            if values["ext"] != DBExtEnum.JSON:
+            elif self.ext != DBExtEnum.JSON:
                 raise ValueError("ext must be JSON if db_type.type is META")
 
-        if values["db_type"].type in (
-            DBTypeEnum.AUCTIONS,
-            DBTypeEnum.COMMODITIES,
-        ) and values["ext"] not in (DBExtEnum.BIN, DBExtEnum.GZ):
+        if self.db_type.type in (DBTypeEnum.COMMODITIES, DBTypeEnum.AUCTIONS) and (
+            self.ext not in (DBExtEnum.BIN, DBExtEnum.GZ)
+        ):
             raise ValueError(
-                "ext must be BIN or GZ when db_type.type is AUCTIONS or COMMODITIES"
+                "ext must be BIN or GZ if db_type.type is COMMODITIES or AUCTIONS"
             )
-
-        return values
 
     def is_compress(self) -> bool:
         return self.ext == DBExtEnum.GZ
@@ -219,12 +207,10 @@ class DBFileName(_BaseModel):
         # it's a string.
         return f'"{self}"'
 
-    class Config(_BaseModel.Config):
-        frozen = True
 
-
+@define(kw_only=True)
 @total_ordering
-class MarketValueRecord(_BaseModel):
+class MarketValueRecord:
     """
 
     >>> market_value_record = {
@@ -239,11 +225,13 @@ class MarketValueRecord(_BaseModel):
         }
     """
 
-    timestamp: int
-    # required optional field, if there's no auctions, this field is None
-    market_value: Optional[int] = ...
-    num_auctions: int
-    min_buyout: Optional[int] = None
+    _logger: ClassVar[Logger] = getLogger("MarketValueRecord")
+    timestamp: np.int32 = field(converter=np.int32)
+    market_value: Optional[np.int64] = field(converter=CW.optional(np.int64))
+    num_auctions: np.int32 = field(converter=np.int32)
+    min_buyout: Optional[np.int64] = field(
+        default=None, converter=CW.optional(np.int64)
+    )
 
     def __eq__(self, other):
         return self.timestamp == other.timestamp
@@ -252,11 +240,8 @@ class MarketValueRecord(_BaseModel):
         return self.timestamp < other.timestamp
 
 
-class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel):
-    # TODO: we can compress old records to a lower granularity, 1 record per day
-    #       for example, to save some space.
-    # TODO: figure out if we want to return 0 and update the return type,
-    #       maybe add warning logs when there are no records.
+@define(kw_only=True)
+class MarketValueRecords(_RootListMixin[MarketValueRecord]):
     """
     Holds an list of MarketValueRecord, ordered by timestamp in ascending order.
 
@@ -266,7 +251,8 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
         ]
     """
 
-    __root__: List[MarketValueRecord] = Field(default_factory=list)
+    _logger: ClassVar[Logger] = getLogger("MarketValueRecords")
+    __root__: List[MarketValueRecord] = field(default=Factory(list), alias="__root__")
     DAY_WEIGHTS: ClassVar[List[int]] = [
         4,
         5,
@@ -434,7 +420,7 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
         # the average of those 60 days.
 
         if not self:
-            self._logger.warning(
+            self._logger.debug(
                 f"{self}: no records, get_historical_market_value() returns 0"
             )
             return 0
@@ -451,7 +437,7 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
                 n_days += 1
 
         if n_days == 0:
-            self._logger.warning(
+            self._logger.debug(
                 f"{self}: all records expired, get_historical_market_value() returns 0"
             )
             return 0
@@ -460,7 +446,7 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
 
     def get_weighted_market_value(self, ts_now: int) -> int:
         if not self:
-            self._logger.warning(
+            self._logger.debug(
                 f"{self}: no records, get_weighted_market_value() returns 0"
             )
             return 0
@@ -481,7 +467,7 @@ class MarketValueRecords(_BaseModelRootListMixin[MarketValueRecord], _BaseModel)
         if sum_weights:
             return int(sum_market_value / sum_weights + 0.5)
         else:
-            self._logger.warning(
+            self._logger.debug(
                 f"{self}: all records expired, get_weighted_market_value() returns 0"
             )
             return 0
@@ -497,8 +483,9 @@ class ILVL_MODIFIERS_TYPES(int, Enum):
     REL_ILVL = -2
 
 
-class ItemString(_BaseModel):
-    """This is a frozen model, it has a __hash__ method generated by pydantic
+@define(kw_only=True, frozen=True, cache_hash=True)
+class ItemString:
+    """This is a frozen model, it has a __hash__ method generated by attrib
     that calcueates the hash value from the model's immutable fields.
 
     To instantiating this model in anyway other than `from_item` (not recommended):
@@ -519,15 +506,23 @@ class ItemString(_BaseModel):
       `AuctionItem` as their `id` field.
     """
 
-    type: ItemStringTypeEnum
-    id: int
-    bonuses: Optional[Tuple[int, ...]] = Field(...)
+    _logger: ClassVar[Logger] = getLogger("ItemString")
+    type: ItemStringTypeEnum = field(converter=CW.norm(ItemStringTypeEnum))
+    id: np.int32 = field(converter=np.int32)
+    bonuses: Optional[Tuple[np.int32, ...]] = field(
+        converter=CW.optional(CW.iter(tuple, np.int32))
+    )
+    # [1.2, 2.3, 3] | None -> opentional
+    # [1.2, 2.3, 3]        -> tuple(np.int32)
+    # (1, 2, 3)
     # used to be kv pairs, cast to even-length tuple for easy hashing
-    mods: Optional[Tuple[int, ...]] = Field(...)
+    mods: Optional[Tuple[np.int32, ...]] = field(
+        converter=CW.optional(CW.iter(tuple, np.int32))
+    )
 
     KEEPED_MODIFIERS_TYPES: ClassVar[List[int]] = [9, 29, 30]
     MAP_BONUSES: ClassVar[Dict] = map_bonuses
-    SET_BONUS_ILVL_FIELDS: ClassVar[Set[int]] = {
+    SET_BONUS_ILVL_FIELDS: ClassVar[Set[str]] = {
         "level",
         "base_level",
         "curveId",
@@ -767,8 +762,8 @@ class ItemString(_BaseModel):
             mods=self.mods if self.mods else tuple(),
         )
 
-    @validator("mods")
-    def check_mods_even(cls, v) -> Optional[Tuple[int, ...]]:
+    @mods.validator
+    def check_mods_even(cls, k, v) -> Optional[Tuple[int, ...]]:
         if v and len(v) % 2 != 0:
             raise ValueError(f"invalid mods: {v}")
 
@@ -811,13 +806,9 @@ class ItemString(_BaseModel):
     def __repr__(self) -> str:
         return f"'{str(self)}'"
 
-    class Config(_BaseModel.Config):
-        frozen = True
 
-
-class MapItemStringMarketValueRecord(
-    _BaseModelRootDictMixin[ItemString, MarketValueRecord], _BaseModel
-):
+@define(kw_only=True)
+class MapItemStringMarketValueRecord(_RootDictMixin[ItemString, MarketValueRecord]):
     """
     data model for market value increment
 
@@ -828,7 +819,10 @@ class MapItemStringMarketValueRecord(
 
     """
 
-    __root__: Dict[ItemString, MarketValueRecord] = Field(default_factory=dict)
+    _logger: ClassVar[Logger] = getLogger("MapItemStringMarketValueRecord")
+    __root__: Dict[ItemString, MarketValueRecord] = field(
+        default=Factory(dict), alias="__root__"
+    )
     MAX_JUMP_MUL: ClassVar[float] = 1.2
     MAX_STD_MUL: ClassVar[float] = 1.5
     SAMPLE_LO: ClassVar[float] = 0.15
@@ -958,9 +952,8 @@ class MapItemStringMarketValueRecord(
         return obj
 
 
-class MapItemStringMarketValueRecords(
-    _BaseModelRootDictMixin[ItemString, MarketValueRecords], _BaseModel
-):
+@define(kw_only=True)
+class MapItemStringMarketValueRecords(_RootDictMixin[ItemString, MarketValueRecords]):
     """
     >>> map_item_string_market_value_records = {
             $item_string: $market_value_records,
@@ -968,16 +961,23 @@ class MapItemStringMarketValueRecords(
         }
     """
 
-    __root__: Dict[ItemString, MarketValueRecords] = Field(
-        default_factory=partial(defaultdict, MarketValueRecords)
+    _logger: ClassVar[Logger] = getLogger("MapItemStringMarketValueRecords")
+    __root__: Dict[ItemString, MarketValueRecords] = field(
+        default=Factory(partial(defaultdict, MarketValueRecords)),
+        alias="__root__",
     )
-    _item_id_map: Dict[int, ItemString] = PrivateAttr(
-        default_factory=partial(defaultdict, list)
+    _item_id_map: Dict[int, ItemString] = field(
+        init=False,
+        default=Factory(partial(defaultdict, list)),
     )
-    _pet_id_map: Dict[int, ItemString] = PrivateAttr(
-        default_factory=partial(defaultdict, list)
+    _pet_id_map: Dict[int, ItemString] = field(
+        init=False,
+        default=Factory(partial(defaultdict, list)),
     )
-    _indexed: bool = PrivateAttr(False)
+    _indexed: bool = field(
+        init=False,
+        default=False,
+    )
 
     def _init_id_maps(self) -> None:
         """build indexes on top of item_string for the need of querying
@@ -999,11 +999,11 @@ class MapItemStringMarketValueRecords(
         result = MapItemStringMarketValueRecords()
         if id_ in self._item_id_map and self._item_id_map[id_]:
             for item_string in self._item_id_map[id_]:
-                result[item_string] = self[item_string].copy(deep=True)
+                result[item_string] = deepcopy(self[item_string])
 
         if id_ in self._pet_id_map and self._pet_id_map[id_]:
             for item_string in self._pet_id_map[id_]:
-                result[item_string] = self[item_string].copy(deep=True)
+                result[item_string] = deepcopy(self[item_string])
 
         return result
 

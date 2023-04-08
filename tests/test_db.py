@@ -494,6 +494,12 @@ class TestAuctionDB(TestCase):
         pick_map_ = db.load_db(pick_file.file_name)
         self.assertEqual(pick_map.to_protobuf_bytes(), pick_map_.to_protobuf_bytes())
 
+        pick_crid = None
+        pick_file = db.get_file(namespace, DBTypeEnum.COMMODITIES, crid=pick_crid)
+        pick_map = db.load_db(pick_file)
+        pick_map_ = db.load_db(pick_file.file_name)
+        self.assertEqual(pick_map.to_protobuf_bytes(), pick_map_.to_protobuf_bytes())
+
     @classmethod
     def make_db_file(cls, db, region, crid):
         namespace = Namespace(

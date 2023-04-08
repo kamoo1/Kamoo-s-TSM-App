@@ -1,16 +1,62 @@
-from typing import ClassVar, Generic, Iterator, TypeVar
-
+from typing import ClassVar, Generic, Iterator, TypeVar, Callable, Type, Any
 from logging import getLogger, Logger
+
 from pydantic import BaseModel, Extra
 
 __all__ = (
     "_BaseModel",
-    "_BaseModelRootListMixin",
-    "_BaseModelRootDictMixin",
+    "_RootListMixin",
+    "_RootDictMixin",
+    "ConverterWrapper",
 )
 
 _VT = TypeVar("_VT")
 _KT = TypeVar("_KT")
+
+_ITEMS_T = TypeVar("_ITEMS_T")
+_ITEM_T = TypeVar("_ITEM_T")
+
+
+class ConverterWrapper:
+    @staticmethod
+    def optional(converter: Callable) -> Callable:
+        """Make a converter ignores None values."""
+
+        def wrapped(value: str) -> str:
+            if value is None:
+                return None
+
+            return converter(value)
+
+        return wrapped
+
+    @staticmethod
+    def iter(
+        items_converter: Callable[[Iterator], Type[_ITEMS_T]],
+        item_converter: Callable[[Any], _ITEM_T],
+    ) -> Callable[[Iterator], Type[_ITEMS_T][_ITEM_T]]:
+        """Make a converter for an iterator of items."""
+
+        def wrapped(items: Iterator) -> Type[_ITEMS_T][_ITEM_T]:
+            return items_converter(item_converter(item) for item in items)
+
+        return wrapped
+
+    @staticmethod
+    def norm(
+        converter: Callable | Type[_ITEM_T],
+        klass: Type[_ITEM_T] = None,
+    ) -> Callable[[Any], _ITEM_T]:
+        """Make a converter skips values that are already converted."""
+
+        def wrapped(value: Any) -> _ITEM_T:
+            _klass = klass or converter
+            if isinstance(value, _klass):
+                return value
+
+            return converter(value)
+
+        return wrapped
 
 
 class _BaseModel(BaseModel):
@@ -35,7 +81,7 @@ class _BaseModel(BaseModel):
         use_enum_values = True
 
 
-class _BaseModelRootListMixin(Generic[_VT]):
+class _RootListMixin(Generic[_VT]):
     def __len__(self) -> int:
         return len(self.__root__)
 
@@ -58,7 +104,7 @@ class _BaseModelRootListMixin(Generic[_VT]):
         return self.__root__.sort(*args, **kwargs)
 
 
-class _BaseModelRootDictMixin(Generic[_KT, _VT]):
+class _RootDictMixin(Generic[_KT, _VT]):
     def __len__(self) -> int:
         return len(self.__root__)
 

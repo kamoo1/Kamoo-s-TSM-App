@@ -4,6 +4,8 @@ import logging
 import sys
 import os
 
+import numpy as np
+
 from ah.models import (
     MapItemStringMarketValueRecords,
     RegionEnum,
@@ -185,7 +187,7 @@ class TSMExporter:
                 else:
                     raise ValueError(f"unsupported field {field}.")
 
-                if isinstance(value, int):
+                if isinstance(value, (int, np.int32, np.int64)):
                     value = cls.baseN(value, 32)
                 elif isinstance(value, float):
                     value = str(value)
