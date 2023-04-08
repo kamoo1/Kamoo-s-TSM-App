@@ -1,5 +1,6 @@
 from unittest import TestCase
 from math import gcd
+from copy import deepcopy
 
 from ah.models import (
     MarketValueRecord,
@@ -394,7 +395,7 @@ class TestModels(TestCase):
             # it's usually n_recent + 1
             recent_records = recent_records[:n_recent]
 
-        expected_recent_records = [r.copy(deep=True) for r in recent_records]
+        expected_recent_records = [deepcopy(r) for r in recent_records]
 
         records = MarketValueRecords(
             __root__=[

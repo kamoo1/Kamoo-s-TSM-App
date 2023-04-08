@@ -135,7 +135,6 @@ class AuctionDB:
                 f"Failed to download asset {file.file_name!r} from {asset_url!r}"
             ) from e
 
-
         # we don't want it to be compressed multiple times
         # since we're essentially doing a copy here.
         if hasattr(file, "use_compression"):
@@ -163,7 +162,6 @@ class AuctionDB:
         return db
 
     @load_db.register
-    # XXX: test this one, when crid = None
     def _(self, file_name: str) -> "MapItemStringMarketValueRecords":
         file_name_ = DBFileName.from_str(file_name)
         file = self.get_file(
@@ -186,7 +184,6 @@ class AuctionDB:
                 ret.append(file_name)
         return ret
 
-    # XXX: update gh_action
     def get_file(
         self,
         namespace: Namespace,

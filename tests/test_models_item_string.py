@@ -19,6 +19,11 @@ class TestModels(TestCase):
         self.assertEqual(item_string1, item_string2)
         self.assertEqual(hash(item_string1), hash(item_string2))
         item_string2 = ItemString(
+            type=ItemStringTypeEnum.ITEM, id=1, bonuses=(1, 3, 2), mods=(1, 1)
+        )
+        self.assertNotEqual(item_string1, item_string2)
+        self.assertNotEqual(hash(item_string1), hash(item_string2))
+        item_string2 = ItemString(
             type=ItemStringTypeEnum.PET, id=1, bonuses=(1, 2, 3), mods=(1, 2)
         )
         self.assertNotEqual(item_string1, item_string2)
