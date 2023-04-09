@@ -234,7 +234,7 @@ class AuctionItem(GenericItemInterface, _BaseModel):
     pet_quality_id: Optional[int] = None
     pet_species_id: Optional[int] = None
 
-    # XXX: these are found in vanilla
+    # NOTE: these fields are part of classic & classic wlk, but not retail
     seed: Optional[int] = None
     rand: Optional[int] = None
 
@@ -324,7 +324,8 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
     commodities: Any
     links: Any = Field(alias="_links")
     connected_realm: Any
-    # XXX: classic
+
+    # NOTE: these fields are part of classic & classic wlk, but not retail
     id: Any
     name: Any
 
