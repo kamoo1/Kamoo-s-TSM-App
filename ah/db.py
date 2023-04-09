@@ -1,11 +1,11 @@
+from __future__ import annotations
 import re
 import os
 import json
 import logging
 from functools import singledispatchmethod
+from typing import TYPE_CHECKING
 
-
-from ah.api import GHAPI
 from ah.storage import BinaryFile, TextFile, BaseFile
 from ah.models import (
     MapItemStringMarketValueRecords,
@@ -14,12 +14,14 @@ from ah.models import (
     Namespace,
     DBExtEnum,
     DBTypeEnum,
-    DBType,
-    GameVersionEnum,
+    FactionEnum,
 )
 from ah.defs import SECONDS_IN
 from typing import Dict, Optional, Any
 from ah import config
+
+if TYPE_CHECKING:
+    from ah.api import GHAPI
 
 __all__ = ("AuctionDB",)
 
@@ -166,8 +168,8 @@ class AuctionDB:
         file_name_ = DBFileName.from_str(file_name)
         file = self.get_file(
             file_name_.namespace,
-            file_name_.db_type.type,
-            crid=file_name_.db_type.crid,
+            file_name_.db_type,
+            crid=file_name_.crid,
         )
         return self.load_db(file)
 
@@ -187,32 +189,24 @@ class AuctionDB:
     def get_file(
         self,
         namespace: Namespace,
-        db_type_e: DBTypeEnum,
+        db_type: DBTypeEnum,
         crid: Optional[int] = None,
+        faction: Optional[FactionEnum] = None,
     ) -> BaseFile:
-        if (
-            db_type_e == DBTypeEnum.COMMODITIES
-            and namespace.game_version != GameVersionEnum.RETAIL
-        ):
-            raise ValueError(
-                f"Only retail has commodities db, got {namespace.game_version=!r}"
-            )
-
-        if db_type_e in (DBTypeEnum.COMMODITIES, DBTypeEnum.META):
-            db_type = DBType(type=db_type_e)
-        elif db_type_e == DBTypeEnum.AUCTIONS:
-            db_type = DBType(type=db_type_e, crid=crid)
-        else:
-            raise ValueError(f"Invalid `db_type_e` for get_file: {db_type_e!r}")
-
-        if db_type.type == DBTypeEnum.META:
+        if db_type == DBTypeEnum.META:
             ext = DBExtEnum.JSON
         else:
             ext = DBExtEnum.GZ if self.use_compression else DBExtEnum.BIN
 
-        file_name = DBFileName(namespace=namespace, db_type=db_type, ext=ext)
+        file_name = DBFileName(
+            namespace=namespace,
+            db_type=db_type,
+            crid=crid,
+            faction=faction,
+            ext=ext,
+        )
         file_path = os.path.join(self.data_path, str(file_name))
-        if db_type.type == DBTypeEnum.META:
+        if db_type == DBTypeEnum.META:
             file = TextFile(file_path)
         else:
             file = BinaryFile(file_path, use_compression=self.use_compression)

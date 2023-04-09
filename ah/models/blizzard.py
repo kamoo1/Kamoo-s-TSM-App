@@ -1,15 +1,29 @@
-import sys
+from __future__ import annotations
+import os
 import abc
 import time
 from enum import Enum
-from typing import List, Iterator, Literal, Union, Any, Dict, Optional, ClassVar
+from typing import (
+    List,
+    Iterator,
+    Literal,
+    Union,
+    Any,
+    Dict,
+    Optional,
+    ClassVar,
+    TYPE_CHECKING,
+)
 
 from pydantic import Field, root_validator
 
 from ah.models.base import _BaseModel
-from ah.api import BNAPI
+
+if TYPE_CHECKING:
+    from ah.api import BNAPI
 
 __all__ = (
+    "FactionEnum",
     "RegionEnum",
     "Namespace",
     "NameSpaceCategoriesEnum",
@@ -27,6 +41,19 @@ __all__ = (
 )
 
 
+class FactionEnum(str, Enum):
+    ALLIANCE = "a"
+    HORDE = "h"
+
+    def get_full_name(self) -> str:
+        if self == self.ALLIANCE:
+            return "Alliance"
+        elif self == self.HORDE:
+            return "Horde"
+        else:
+            raise ValueError(f"Invalid faction: {self}")
+
+
 class RegionEnum(str, Enum):
     US = "us"
     EU = "eu"
@@ -39,19 +66,32 @@ class NameSpaceCategoriesEnum(str, Enum):
     STATIC = "static"
 
 
-if "unittest" in sys.modules:
+class GameVersionEnum(str, Enum):
+    CLASSIC = "classic1x"
+    CLASSIC_WLK = "classic"
+    RETAIL = ""
 
-    class GameVersionEnum(str, Enum):
-        CLASSIC = "classic1x"
-        CLASSIC_WLK = "classic"
-        RETAIL = ""
+    # namespace, warcraft install paths, tsm slug - they all have their own
+    # naming conventions...
+    def get_tsm_game_version(self) -> Optional[str]:
+        if self == self.CLASSIC:
+            return "Classic"
+        elif self == self.CLASSIC_WLK:
+            return "BCC"
+        elif self == self.RETAIL:
+            return None
+        else:
+            raise ValueError(f"Invalid game version: {self!s}")
 
-else:
-
-    class GameVersionEnum(str, Enum):
-        # CLASSIC = "classic1x"
-        # CLASSIC_WLK = "classic"
-        RETAIL = ""
+    def get_version_folder_name(self) -> str:
+        if self == self.CLASSIC:
+            return "_classic_era_"
+        elif self == self.CLASSIC_WLK:
+            return "_classic_"
+        elif self == self.RETAIL:
+            return "_retail_"
+        else:
+            raise ValueError(f"Invalid game version: {self!s}")
 
 
 class Namespace(_BaseModel):
@@ -75,6 +115,14 @@ class Namespace(_BaseModel):
         else:
             raise ValueError(f"Invalid namespace: {ns}")
         return cls(category=category, game_version=game_version, region=region)
+
+    def get_locale(self) -> str:
+        if self.region == RegionEnum.KR:
+            return "ko_KR"
+        elif self.region == RegionEnum.TW:
+            return "zh_TW"
+        else:
+            return "en_US"
 
     def __str__(self) -> str:
         return self.to_str()
@@ -186,6 +234,10 @@ class AuctionItem(GenericItemInterface, _BaseModel):
     pet_quality_id: Optional[int] = None
     pet_species_id: Optional[int] = None
 
+    # XXX: these are found in vanilla
+    seed: Optional[int] = None
+    rand: Optional[int] = None
+
     @root_validator(pre=True)
     def check_pet_fields(cls, values):
         pet_fields = ["pet_breed_id", "pet_level", "pet_quality_id", "pet_species_id"]
@@ -265,14 +317,16 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
         }
     """
 
-    # don't care, `Any` implies optional field
-    links: Any = Field(alias="_links")
-    # don't care
-    connected_realm: Any
     auctions: List[Auction]
-    # don't care
-    commodities: Any
     timestamp: int = Field(default_factory=lambda: int(time.time()))
+
+    # don't care, `Any` implies optional field
+    commodities: Any
+    links: Any = Field(alias="_links")
+    connected_realm: Any
+    # XXX: classic
+    id: Any
+    name: Any
 
     def get_auctions(self) -> List[GenericAuctionInterface]:
         return self.auctions
@@ -282,9 +336,13 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
 
     @classmethod
     def from_api(
-        cls, bn_api: BNAPI, region: RegionEnum, connected_realm_id: str
+        cls,
+        bn_api: BNAPI,
+        namespace: Namespace,
+        connected_realm_id: str,
+        faction: FactionEnum,
     ) -> "AuctionsResponse":
-        resp = bn_api.pull_auctions(region, connected_realm_id)
+        resp = bn_api.pull_auctions(namespace, connected_realm_id, faction=faction)
         return cls.parse_obj(resp)
 
 
@@ -358,8 +416,8 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
         return self.auctions
 
     @classmethod
-    def from_api(cls, bn_api: BNAPI, region: RegionEnum) -> "CommoditiesResponse":
-        resp = bn_api.pull_commodities(region)
+    def from_api(cls, bn_api: BNAPI, namespace: Namespace) -> "CommoditiesResponse":
+        resp = bn_api.pull_commodities(namespace)
         return cls.parse_obj(resp)
 
     def get_timestamp(self) -> int:

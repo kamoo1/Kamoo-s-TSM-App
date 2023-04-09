@@ -66,16 +66,21 @@ class WowGameDataApi(Api):
         query_params = {"namespace": f"dynamic-classic-{region}", "locale": locale}
         return super().get_resource(resource, region, query_params)
 
-    def get_commodities(self, region, locale):
+    def get_commodities(self, region, locale, namespace):
         """Returns all commodities for region."""
         resource = "/data/wow/auctions/commodities"
-        query_params = {"namespace": f"dynamic-{region}", "locale": locale}
+        query_params = {"namespace": namespace, "locale": locale}
         return super().get_resource(resource, region, query_params)
 
-    def get_auctions(self, region, locale, connected_realm_id):
+    def get_auctions(
+        self, region, locale, namespace, connected_realm_id, auction_house_id=None
+    ):
         """Return all active auctions for a connected realm."""
         resource = f"/data/wow/connected-realm/{connected_realm_id}/auctions"
-        query_params = {"namespace": f"dynamic-{region}", "locale": locale}
+        if auction_house_id:
+            resource += f"/{auction_house_id}"
+
+        query_params = {"namespace": namespace, "locale": locale}
         return super().get_resource(resource, region, query_params)
 
     # Azerite Essence API
@@ -100,17 +105,15 @@ class WowGameDataApi(Api):
 
     # Connected Realm API
 
-    def get_connected_realms_index(self, region, locale, is_classic=False):
+    def get_connected_realms_index(self, region, locale, namespace):
         """Return an index of connected realms."""
         resource = "/data/wow/connected-realm/index"
-        namespace = f"dynamic-classic-{region}" if is_classic else f"dynamic-{region}"
         query_params = {"namespace": namespace, "locale": locale}
         return super().get_resource(resource, region, query_params)
 
-    def get_connected_realm(self, region, locale, connected_realm_id, is_classic=False):
+    def get_connected_realm(self, region, locale, namespace, connected_realm_id):
         """Return a connected realm by ID."""
         resource = f"/data/wow/connected-realm/{connected_realm_id}"
-        namespace = f"dynamic-classic-{region}" if is_classic else f"dynamic-{region}"
         query_params = {"namespace": namespace, "locale": locale}
         return super().get_resource(resource, region, query_params)
 

@@ -17,6 +17,7 @@ from ah.models import (
     DBTypeEnum,
     NameSpaceCategoriesEnum,
     GameVersionEnum,
+    FactionEnum,
 )
 from ah.db import AuctionDB
 from ah import config
@@ -34,21 +35,23 @@ class Updater:
         self.db = db
 
     def pull_increment(
-        self, region: RegionEnum, crid: int = None
+        self, namespace: Namespace, crid: int = None, faction: FactionEnum = None
     ) -> Optional[MapItemStringMarketValueRecord]:
         if crid:
             try:
-                resp = AuctionsResponse.from_api(self.bn_api, region, crid)
+                resp = AuctionsResponse.from_api(
+                    self.bn_api, namespace, crid, faction=faction
+                )
             except Exception:
                 self._logger.exception(
-                    f"Failed to request auctions for {region}-{crid}"
+                    f"Failed to request auctions for {namespace} {crid} {faction!s}"
                 )
                 return
         else:
             try:
-                resp = CommoditiesResponse.from_api(self.bn_api, region)
+                resp = CommoditiesResponse.from_api(self.bn_api, namespace)
             except Exception:
-                self._logger.exception(f"Failed to request commodities for {region}")
+                self._logger.exception(f"Failed to request commodities for {namespace}")
                 return
 
         increment = MapItemStringMarketValueRecord.from_response(resp)
@@ -56,17 +59,36 @@ class Updater:
 
     def update_region_dbs(self, namespace: Namespace) -> Tuple[int, int]:
         start_ts = int(time.time())
-        crids = self.bn_api.pull_connected_realms_ids(namespace.region)
-        for crid in crids:
-            increment = self.pull_increment(namespace.region, crid)
-            if increment:
-                file = self.db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=crid)
-                self.db.update_db(file, increment, start_ts)
+        crids = self.bn_api.pull_connected_realms_ids(namespace)
+        if namespace.game_version == GameVersionEnum.RETAIL:
+            factions = [None]
+        else:
+            factions = [FactionEnum.ALLIANCE, FactionEnum.HORDE]
 
-        increment = self.pull_increment(namespace.region)
-        if increment:
-            file = self.db.get_file(namespace, DBTypeEnum.COMMODITIES)
-            self.db.update_db(file, increment, start_ts)
+        for crid in crids:
+            for faction in factions:
+                # NOTE: present in last api, but can't fetch auctions here.
+                # (tw vanilla) 5299 5301
+                # (tw wlk)     5744
+                increment = self.pull_increment(
+                    namespace,
+                    crid=crid,
+                    faction=faction,
+                )
+                if increment:
+                    file = self.db.get_file(
+                        namespace,
+                        DBTypeEnum.AUCTIONS,
+                        crid=crid,
+                        faction=faction,
+                    )
+                    self.db.update_db(file, increment, start_ts)
+
+        if namespace.game_version == GameVersionEnum.RETAIL:
+            increment = self.pull_increment(namespace)
+            if increment:
+                file = self.db.get_file(namespace, DBTypeEnum.COMMODITIES)
+                self.db.update_db(file, increment, start_ts)
 
         end_ts = int(time.time())
         return start_ts, end_ts
@@ -83,7 +105,10 @@ class Updater:
 
         # connected realms data
         data_cr = {}
-        cr_resp = self.bn_api.pull_connected_realms(namespace.region)
+        # NOTE: listed in first api, but can't fetch the details in the second api.
+        # (tw vanilla) 5299
+        # (tw wlk)     5744
+        cr_resp = self.bn_api.pull_connected_realms(namespace)
         for cr_id in cr_resp.keys():
             cr_info = cr_resp[cr_id]
             realm_names = [realm["name"] for realm in cr_info["realms"]]
@@ -135,6 +160,7 @@ def main(
     task_manager = Updater(bn_api, db)
     start_ts, end_ts = task_manager.update_region_dbs(namespace)
     task_manager.update_region_meta(namespace, start_ts, end_ts)
+    task_manager._logger.info(f"Updated {namespace}")
 
 
 def parse_args(raw_args):

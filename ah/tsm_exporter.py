@@ -13,6 +13,7 @@ from ah.models import (
     NameSpaceCategoriesEnum,
     GameVersionEnum,
     DBTypeEnum,
+    FactionEnum,
 )
 from ah.storage import TextFile
 from ah.db import AuctionDB
@@ -32,6 +33,7 @@ class TSMExporter:
             "numAuctions",
             "marketValueRecent",
         ],
+        "per_faction": True,
     }
     REALM_AUCTIONS_COMMODITIES_EXPORTS = [
         {
@@ -42,6 +44,7 @@ class TSMExporter:
                 "itemString",
                 "historical",
             ],
+            "per_faction": True,
         },
         {
             "type": "AUCTIONDB_REALM_SCAN_STAT",
@@ -51,6 +54,7 @@ class TSMExporter:
                 "itemString",
                 "marketValue",
             ],
+            "per_faction": True,
         },
     ]
     COMMODITIES_EXPORT = {
@@ -102,7 +106,17 @@ class TSMExporter:
         self.export_file = export_file
 
     @classmethod
-    def find_warcraft_dir_windows(cls) -> str:
+    def get_tsm_appdata_path(cls, warcraft_path: str) -> str:
+        return os.path.join(
+            warcraft_path,
+            "Interface",
+            "AddOns",
+            "TradeSkillMaster_AppHelper",
+            "AppData.lua",
+        )
+
+    @classmethod
+    def find_warcraft_base_windows(cls) -> str:
         if sys.platform == "win32":
             import winreg
         else:
@@ -113,25 +127,8 @@ class TSMExporter:
             r"SOFTWARE\WOW6432Node\Blizzard Entertainment\World of Warcraft",
         )
         path = winreg.QueryValueEx(key, "InstallPath")[0]
+        path = os.path.join(path, "..")
         return os.path.normpath(path)
-
-    @classmethod
-    def get_tsm_export_path(cls) -> Optional[str]:
-        try:
-            warcraft_path = cls.find_warcraft_dir_windows()
-        except Exception:
-            return None
-
-        if not warcraft_path.endswith("_retail_"):
-            return None
-
-        return os.path.join(
-            warcraft_path,
-            "Interface",
-            "AddOns",
-            "TradeSkillMaster_AppHelper",
-            "AppData.lua",
-        )
 
     @classmethod
     def baseN(cls, num, b, numerals="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
@@ -236,11 +233,17 @@ class TSMExporter:
             for realm in connected_realms
         }
         if not export_realms <= all_realms:
-            raise ValueError(f"invalid realm names: {export_realms - all_realms}. ")
+            raise ValueError(f"unavailable realms : {export_realms - all_realms}. ")
 
         region_auctions_commodities_data = MapItemStringMarketValueRecords()
-        commodity_file = self.db.get_file(namespace, DBTypeEnum.COMMODITIES)
-        commodity_data = self.db.load_db(commodity_file)
+
+        if namespace.game_version == GameVersionEnum.RETAIL:
+            commodity_file = self.db.get_file(namespace, DBTypeEnum.COMMODITIES)
+            commodity_data = self.db.load_db(commodity_file)
+        else:
+            commodity_file = None
+            commodity_data = None
+
         if commodity_data:
             region_auctions_commodities_data.extend(commodity_data)
             self.export_append_data(
@@ -253,53 +256,90 @@ class TSMExporter:
                 ts_update_end,
             )
 
+        if namespace.game_version == GameVersionEnum.RETAIL:
+            factions = [None]
+        else:
+            factions = [FactionEnum.ALLIANCE, FactionEnum.HORDE]
+
         for crid, connected_realms in map_crid_connected_realms.items():
             crid = int(crid)
             connected_realms = set(connected_realms)
             # find all realm names we want to export under this connected realm,
             # they share the same auction data
             sub_export_realms = export_realms & connected_realms
-            db_file = self.db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=crid)
-            auction_data = self.db.load_db(db_file)
-            if not auction_data:
-                continue
 
-            for realm in sub_export_realms:
-                self.export_append_data(
-                    self.export_file,
-                    auction_data,
-                    self.REALM_AUCTIONS_EXPORT["fields"],
-                    self.REALM_AUCTIONS_EXPORT["type"],
-                    realm,
-                    ts_update_start,
-                    ts_update_end,
+            for faction in factions:
+                db_file = self.db.get_file(
+                    namespace,
+                    DBTypeEnum.AUCTIONS,
+                    crid=crid,
+                    faction=faction,
                 )
+                auction_data = self.db.load_db(db_file)
+                if not auction_data:
+                    self._logger.warning(f"no data in {db_file}.")
+                    continue
 
-            realm_auctions_commodities_data = MapItemStringMarketValueRecords()
-            realm_auctions_commodities_data.extend(auction_data)
-            realm_auctions_commodities_data.extend(commodity_data)
-            region_auctions_commodities_data.extend(auction_data)
+                region_auctions_commodities_data.extend(auction_data)
+                if commodity_data:
+                    realm_auctions_commodities_data = MapItemStringMarketValueRecords()
+                    realm_auctions_commodities_data.extend(commodity_data)
+                else:
+                    realm_auctions_commodities_data = auction_data
 
-            for export_realm in self.REALM_AUCTIONS_COMMODITIES_EXPORTS:
                 for realm in sub_export_realms:
+                    if faction is None:
+                        tsm_realm = realm
+                    else:
+                        tsm_realm = f"{realm}-{faction.get_full_name()}"
+
                     self.export_append_data(
                         self.export_file,
-                        realm_auctions_commodities_data,
-                        export_realm["fields"],
-                        export_realm["type"],
-                        realm,
+                        auction_data,
+                        self.REALM_AUCTIONS_EXPORT["fields"],
+                        self.REALM_AUCTIONS_EXPORT["type"],
+                        tsm_realm,
                         ts_update_start,
                         ts_update_end,
                     )
+                    for export_realm in self.REALM_AUCTIONS_COMMODITIES_EXPORTS:
+                        self.export_append_data(
+                            self.export_file,
+                            realm_auctions_commodities_data,
+                            export_realm["fields"],
+                            export_realm["type"],
+                            tsm_realm,
+                            ts_update_start,
+                            ts_update_end,
+                        )
 
         if region_auctions_commodities_data:
             for region_export in self.REGION_AUCTIONS_COMMODITIES_EXPORTS:
+                if (
+                    namespace.game_version
+                    in (
+                        GameVersionEnum.CLASSIC,
+                        GameVersionEnum.CLASSIC_WLK,
+                    )
+                    and namespace.region == RegionEnum.TW
+                ):
+                    # TSM reconizes TW as KR in classic
+                    region = "KR"
+                else:
+                    region = namespace.region.upper()
+
+                tsm_game_version = namespace.game_version.get_tsm_game_version()
+                if tsm_game_version:
+                    tsm_region = f"{tsm_game_version}-{region}"
+                else:
+                    tsm_region = region
+
                 self.export_append_data(
                     self.export_file,
                     region_auctions_commodities_data,
                     region_export["fields"],
                     region_export["type"],
-                    namespace.region.upper(),
+                    tsm_region,
                     ts_update_start,
                     ts_update_end,
                 )
@@ -323,7 +363,7 @@ def main(
     repo: str = None,
     gh_proxy: str = None,
     game_version: GameVersionEnum = None,
-    export_path: str = None,
+    warcraft_base: str = None,
     export_region: RegionEnum = None,
     export_realms: Set[str] = None,
     cache: Cache = None,
@@ -341,6 +381,8 @@ def main(
     else:
         mode = AuctionDB.MODE_LOCAL_RW
 
+    warcraft_path = os.path.join(warcraft_base, game_version.get_version_folder_name())
+    export_path = TSMExporter.get_tsm_appdata_path(warcraft_path)
     db = AuctionDB(
         db_path,
         config.MARKET_VALUE_RECORD_EXPIRES,
@@ -365,7 +407,11 @@ def parse_args(raw_args):
     parser = argparse.ArgumentParser()
     default_db_path = config.DEFAULT_DB_PATH
     default_game_version = GameVersionEnum.RETAIL.name.lower()
-    default_export_path = TSMExporter.get_tsm_export_path()
+    try:
+        default_warcraft_base = TSMExporter.find_warcraft_base_windows()
+    except Exception:
+        default_warcraft_base = None
+
     parser.add_argument(
         "--db_path",
         type=str,
@@ -397,10 +443,12 @@ def parse_args(raw_args):
         help=f"Game version to export, default: {default_game_version!r}",
     )
     parser.add_argument(
-        "--export_path",
+        "--warcraft_base",
         type=str,
-        default=default_export_path,
-        help=f"Path to export TSM data, default: {default_export_path!r}",
+        default=default_warcraft_base,
+        help="Path to Warcraft installation directory, "
+        "needed if the script is unable to locate it automatically, "
+        f"default: {default_warcraft_base!r}",
     )
     parser.add_argument(
         "export_region",
@@ -414,15 +462,16 @@ def parse_args(raw_args):
         help="Realms to export, separated by space.",
     )
     args = parser.parse_args(raw_args)
-    args.game_version = GameVersionEnum[args.game_version.upper()]
-    if not args.export_path:
+    if not args.warcraft_base:
         raise ValueError(
-            "Unable to locate TSM's auction data path, please specify it manually with"
-            " --export_path. (should be something like '"
-            "%warcraft%/Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua')"
+            "Unable to locate Warcraft installation directory, "
+            "please specify it with --warcraft_base option. "
+            "Should be something like 'C:\\path_to\\World of Warcraft'."
         )
+    args.game_version = GameVersionEnum[args.game_version.upper()]
     args.export_region = RegionEnum(args.export_region)
     args.export_realms = set(args.export_realms)
+
     return args
 
 

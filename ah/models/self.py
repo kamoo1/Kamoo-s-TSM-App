@@ -37,13 +37,15 @@ from ah.models.blizzard import (
     GenericItemInterface,
     AuctionItem,
     CommodityItem,
+    FactionEnum,
+    GameVersionEnum,
 )
 from ah.defs import SECONDS_IN
 from ah.data import map_bonuses
 
 __all__ = (
     "DBTypeEnum",
-    "DBType",
+    # "DBType",
     "DBExtEnum",
     "DBFileName",
     "MarketValueRecord",
@@ -83,70 +85,6 @@ class DBTypeEnum(str, Enum):
     META = "meta"
 
 
-@define(kw_only=True, frozen=True)
-class DBType:
-    _logger: ClassVar[Logger] = getLogger("DBType")
-    type: DBTypeEnum = field(converter=CW.norm(DBTypeEnum))
-    crid: Optional[int] = None
-
-    def __attrs_post_init__(self):
-        self.validate_root()
-
-    def validate_root(self):
-        if self.type == DBTypeEnum.AUCTIONS and self.crid is None:
-            raise ValueError("crid must not be None if type is AUCTIONS")
-
-        if (
-            self.type in (DBTypeEnum.COMMODITIES, DBTypeEnum.META)
-            and self.crid is not None
-        ):
-            raise ValueError("crid must be None if type is COMMODITIES or META")
-
-    @classmethod
-    def from_str(cls, s: str) -> "DBType":
-        """
-        meta
-        commodities
-        auctions1234
-        """
-        if s == DBTypeEnum.META:
-            return cls(type=DBTypeEnum.META)
-
-        if s == DBTypeEnum.COMMODITIES:
-            return cls(type=DBTypeEnum.COMMODITIES)
-
-        if s.startswith(DBTypeEnum.AUCTIONS):
-            crid_str = s[len(DBTypeEnum.AUCTIONS) :]
-            try:
-                crid = int(crid_str)
-            except ValueError as e:
-                raise ValueError(
-                    f"Invalid {cls.__name__}: {s!r}, cannot parse crid."
-                ) from e
-
-            if str(crid) != crid_str:
-                raise ValueError(f"Invalid {cls.__name__}: {s!r}, illegal crid.")
-
-            if crid < 0:
-                raise ValueError(f"Invalid {cls.__name__}: {s!r}, crid must be >= 0.")
-
-            return cls(type=DBTypeEnum.AUCTIONS, crid=crid)
-
-        raise ValueError(f"Invalid {cls.__name__}: {s!r}")
-
-    def to_str(self) -> str:
-        if self.type == DBTypeEnum.AUCTIONS:
-            return f"{self.type}{self.crid}"
-
-        return self.type
-
-    def __str__(self):
-        return self.to_str()
-
-    def __repr__(self):
-        return f'"{self}"'
-
-
 class DBExtEnum(str, Enum):
     GZ = "gz"
     BIN = "bin"
@@ -157,10 +95,12 @@ class DBExtEnum(str, Enum):
 class DBFileName:
     _logger: ClassVar[Logger] = getLogger("DBFileName")
     namespace: Namespace = field(converter=CW.norm(Namespace.from_str, Namespace))
-    db_type: DBType = field(converter=CW.norm(DBType.from_str, DBType))
-    ext: Optional[DBExtEnum] = field(
-        default=None, converter=CW.optional(CW.norm(DBExtEnum))
+    db_type: DBTypeEnum = field(converter=CW.norm(DBTypeEnum))
+    crid: Optional[int] = field(default=None, converter=CW.optional(int))
+    faction: Optional[FactionEnum] = field(
+        default=None, converter=CW.optional(CW.norm(FactionEnum))
     )
+    ext: DBExtEnum = field(converter=CW.norm(DBExtEnum))
     SEP: ClassVar[str] = "_"
     SEP_EXT: ClassVar[str] = "."
 
@@ -168,35 +108,89 @@ class DBFileName:
         self.validate_root()
 
     def validate_root(self):
-        if self.db_type.type == DBTypeEnum.META:
-            if self.ext is None:
-                # self.ext = DBExtEnum.JSON
-                object.__setattr__(self, "ext", DBExtEnum.JSON)
-
-            elif self.ext != DBExtEnum.JSON:
+        # if db_type == META, then ext must be JSON
+        # elif db_type in (AUCTIONS, COMMODITIES), then ext must in (BIN, GZ)
+        # else: raise ValueError
+        if self.db_type == DBTypeEnum.META:
+            if self.ext != DBExtEnum.JSON:
                 raise ValueError("ext must be JSON if db_type.type is META")
+        elif self.db_type in (DBTypeEnum.COMMODITIES, DBTypeEnum.AUCTIONS):
+            if self.ext not in (DBExtEnum.BIN, DBExtEnum.GZ):
+                raise ValueError(
+                    "ext must be BIN or GZ if db_type.type is COMMODITIES or AUCTIONS"
+                )
+        else:
+            raise ValueError(f"Invalid db_type: {self.db_type}")
 
-        if self.db_type.type in (DBTypeEnum.COMMODITIES, DBTypeEnum.AUCTIONS) and (
-            self.ext not in (DBExtEnum.BIN, DBExtEnum.GZ)
+        # if db_type == AUCTIONS, then crid must be set
+        # elif db_type in (META, COMMODITIES), then crid must be None
+        # else: raise ValueError
+        if self.db_type == DBTypeEnum.AUCTIONS:
+            if self.crid is None:
+                raise ValueError("crid must be set if db_type.type is AUCTIONS")
+        elif self.db_type in (DBTypeEnum.META, DBTypeEnum.COMMODITIES):
+            if self.crid is not None:
+                raise ValueError(
+                    "crid must be None if db_type.type is META or COMMODITIES"
+                )
+        else:
+            raise ValueError(f"Invalid db_type: {self.db_type}")
+
+        # if db_type == COMMODITIES, then namespace.game_version must be RETAIL
+        if self.db_type == DBTypeEnum.COMMODITIES:
+            if self.namespace.game_version != GameVersionEnum.RETAIL:
+                raise ValueError(
+                    "db_type.type cannot be COMMODITIES if namespace is not RETAIL"
+                )
+
+        # if namespace.game_version == RETAIL then faction must be None
+        # elif namespace.game_version in (CLASSIC, CLASSIC_WLK)
+        #     if db_type != META, then faction must be set
+        # else: raise ValueError
+        if self.namespace.game_version == GameVersionEnum.RETAIL:
+            if self.faction is not None:
+                raise ValueError(
+                    "faction must be None if namespace.game_version is RETAIL"
+                )
+        elif self.namespace.game_version in (
+            GameVersionEnum.CLASSIC,
+            GameVersionEnum.CLASSIC_WLK,
         ):
-            raise ValueError(
-                "ext must be BIN or GZ if db_type.type is COMMODITIES or AUCTIONS"
-            )
+            if self.db_type != DBTypeEnum.META and self.faction is None:
+                raise ValueError(
+                    "faction must be set if namespace.game_version is "
+                    "CLASSIC or CLASSIC_WLK and db_type.type is not META"
+                )
 
     def is_compress(self) -> bool:
         return self.ext == DBExtEnum.GZ
 
     def to_str(self) -> str:
-        return f"{self.namespace}{self.SEP}{self.db_type}{self.SEP_EXT}{self.ext}"
+        parts = filter(
+            lambda x: x is not None,
+            [self.namespace, self.db_type, self.crid, self.faction],
+        )
+        parts = map(lambda s: s if isinstance(s, str) else str(s), parts)
+        return f"{self.SEP.join(parts)}{self.SEP_EXT}{self.ext}"
 
     @classmethod
     def from_str(cls, name: str) -> "DBFileName":
         name, ext = name.split(cls.SEP_EXT)
-        namespace, db_type = name.split(cls.SEP)
+        parts = name.split(cls.SEP)
+        # possible parts:
+        # 1. namespace, db_type, crid, faction
+        # 2. namespace, db_type, crid
+        # 3. namespace, db_type
+
+        # pad parts with None
+        parts += [None] * (4 - len(parts))
+        namespace, db_type, crid, faction = parts
         return cls(
-            namespace=Namespace.from_str(namespace),
-            db_type=DBType.from_str(db_type),
-            ext=DBExtEnum(ext),
+            namespace=namespace,
+            db_type=db_type,
+            crid=crid,
+            faction=faction,
+            ext=ext,
         )
 
     def __str__(self):
@@ -969,14 +963,17 @@ class MapItemStringMarketValueRecords(_RootDictMixin[ItemString, MarketValueReco
     _item_id_map: Dict[int, ItemString] = field(
         init=False,
         default=Factory(partial(defaultdict, list)),
+        repr=False,
     )
     _pet_id_map: Dict[int, ItemString] = field(
         init=False,
         default=Factory(partial(defaultdict, list)),
+        repr=False,
     )
     _indexed: bool = field(
         init=False,
         default=False,
+        repr=False,
     )
 
     def _init_id_maps(self) -> None:

@@ -78,7 +78,9 @@ class _BaseModel(BaseModel):
 
     class Config:
         extra = Extra.forbid
-        use_enum_values = True
+        # this makes pydantic use the enum value instead of the enum
+        # TODO: test dumping them actually serializes the value
+        # use_enum_values = True
 
 
 class _RootListMixin(Generic[_VT]):

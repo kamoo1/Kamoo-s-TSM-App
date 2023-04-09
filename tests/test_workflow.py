@@ -26,10 +26,16 @@ class DummyAPIWrapper:
         return {
             "connected_realms": [
                 {
-                    "href": "https://us.api.blizzard.com/data/wow/connected-realm/1?namespace=dynamic-us"
+                    "href": (
+                        "https://us.api.blizzard.com/data/wow/"
+                        "connected-realm/1?namespace=dynamic-us"
+                    )
                 },
                 {
-                    "href": "https://us.api.blizzard.com/data/wow/connected-realm/2?namespace=dynamic-us"
+                    "href": (
+                        "https://us.api.blizzard.com/data/wow/"
+                        "connected-realm/2?namespace=dynamic-us"
+                    )
                 },
             ]
         }
@@ -54,7 +60,7 @@ class DummyAPIWrapper:
             ]
         }
 
-    def get_auctions(self, region, connected_realm_id):
+    def get_auctions(self, region, connected_realm_id, auction_house_id=None):
         return {
             "_links": {},
             "connected_realm": {},
@@ -213,7 +219,7 @@ class TestWorkflow(TestCase):
         region = "us"
         namespace = Namespace(
             category=NameSpaceCategoriesEnum.STATIC,
-            game_version=GameVersionEnum.CLASSIC,
+            game_version=GameVersionEnum.RETAIL,
             region=region,
         )
         with temp:
@@ -289,8 +295,8 @@ class TestWorkflow(TestCase):
             files = set(os.listdir(db_path))
             expected = {
                 "dynamic-us_meta.json",
-                "dynamic-us_auctions1.gz",
-                "dynamic-us_auctions2.gz",
+                "dynamic-us_auctions_1.gz",
+                "dynamic-us_auctions_2.gz",
                 "dynamic-us_commodities.gz",
             }
             self.assertSetEqual(expected, files)
