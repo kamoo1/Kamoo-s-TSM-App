@@ -284,6 +284,7 @@ class TSMExporter:
                 if commodity_data:
                     realm_auctions_commodities_data = MapItemStringMarketValueRecords()
                     realm_auctions_commodities_data.extend(commodity_data)
+                    realm_auctions_commodities_data.extend(auction_data)
                 else:
                     realm_auctions_commodities_data = auction_data
 
