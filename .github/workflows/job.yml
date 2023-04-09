@@ -38,7 +38,6 @@ jobs:
       run: |
         echo "JOB_START_TS=$(date +%s)" >> $GITHUB_ENV
         echo "DB_PATH=/tmp/ah_db" >> $GITHUB_ENV
-        echo "REGION=tw" >> $GITHUB_ENV
     - name: Get AH Database File from GitHub Cache
       uses: actions/cache@v3
       with:
@@ -55,9 +54,12 @@ jobs:
         BN_CLIENT_ID: ${{ secrets.BN_CLIENT_ID }}
         BN_CLIENT_SECRET: ${{ secrets.BN_CLIENT_SECRET }}
       run: >
-        python -m ah.updater
-        --db_path ${{ env.DB_PATH }}
-        ${{ env.REGION }}
+        printf %s\\n retail classic classic_wlk | 
+        xargs -I % -n 1 -P 0 
+        python -m ah.updater 
+        --db_path ${{ env.DB_PATH }} 
+        --game_version % 
+        tw
     - name: Release DB
       uses: softprops/action-gh-release@v1
       with:
