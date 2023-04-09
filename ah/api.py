@@ -190,7 +190,7 @@ class GHAPI(BoundCacheMixin):
 
     @bound_cache(SECONDS_IN.HOUR)
     def get_assets_uri(self, owner: str, repo: str) -> Dict[str, str]:
-        url = "https://api.github.com/repos/{user}/{repo}/releases"
+        url = "https://api.github.com/repos/{user}/{repo}/releases/latest"
         if self.gh_proxy:
             # TODO: make it safe to use url without trailing slash
             url = self.gh_proxy + url
@@ -199,11 +199,40 @@ class GHAPI(BoundCacheMixin):
             **self.REQUESTS_KWARGS,
         )
         if resp.status_code != 200:
-            raise ValueError(f"Failed to get releases, code: {resp.status_code}")
-        releases = resp.json()
+            raise ValueError(f"Failed to get latest releases, code: {resp.status_code}")
+        latest_release = resp.json()
+        latest_release_id = latest_release["id"]
+
         ret = {}
-        for asset in releases[0]["assets"]:
-            ret[asset["name"]] = asset["browser_download_url"]
+        page = 0
+        per_page = 100
+        while True:
+            page += 1
+            url = (
+                "https://api.github.com/repos/{user}/{repo}/"
+                "releases/{release_id}/assets?page={page}per_page={per_page}"
+            )
+            resp = self.session.get(
+                url.format(
+                    user=owner,
+                    repo=repo,
+                    release_id=latest_release_id,
+                    page=page,
+                    per_page=per_page,
+                ),
+                **self.REQUESTS_KWARGS,
+            )
+            if resp.status_code != 200:
+                raise ValueError(
+                    f"Failed to get latest release assets, code: {resp.status_code}"
+                )
+
+            assets = resp.json()
+            for asset in assets:
+                ret[asset["name"]] = asset["browser_download_url"]
+
+            if len(assets) < per_page:
+                break
 
         return ret
 
