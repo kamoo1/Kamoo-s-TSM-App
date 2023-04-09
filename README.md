@@ -5,8 +5,8 @@
 TSM Backend is a serverless auction data updater and exporter for the Trade Skill Master (TSM) addon in World of Warcraft.
 
 ## Features
-- Updates auction data and stores it in a database file.
-- Exports auction data to TSM's `AuctionDB.lua` file.
+- Updates auction data and stores it in a database.
+- Exports auction data to TSM's `AppData.lua` file.
 - Supports Retail as well as Classic and Classic WLK
 - Updates can be run on Github Actions, database files are shared via Github Releases. You can skip the update step and directly export the data from an existing repository.
 
