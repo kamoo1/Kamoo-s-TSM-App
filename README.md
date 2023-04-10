@@ -45,9 +45,11 @@ Auction data from Github Actions is shared via Github Releases, which means you 
 skip the update step and directly export the data from an existing repository.
 To do this, run the following command:
 ```bash
-python -m ah.tsm_exporter --repo https://github.com/kamoo1/TSM-Backend tw {realm1} {realm2} ...
+python -m ah.tsm_exporter --repo https://github.com/kamoo1/TSM-Backend {region} {realm1} {realm2} ...
 ```
 
-## Future Plans
-- [x] Average historical records by day to reduce database size.
-- [x] Add Classic and Classic WLK support.
+> Please note that this repository only provides data for TW and KR realms. If you want to export data for other regions, you will have to run the update step yourself or use a repository that provides data for your region.
+
+
+## Release
+You can find a Windows executable in the [releases](https://github.com/kamoo1/TSM-Backend/releases) section for convenience.
