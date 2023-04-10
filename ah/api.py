@@ -210,7 +210,7 @@ class GHAPI(BoundCacheMixin):
             page += 1
             url = (
                 "https://api.github.com/repos/{user}/{repo}/"
-                "releases/{release_id}/assets?page={page}per_page={per_page}"
+                "releases/{release_id}/assets?page={page}&per_page={per_page}"
             )
             resp = self.session.get(
                 url.format(
