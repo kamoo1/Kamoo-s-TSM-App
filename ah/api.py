@@ -1,9 +1,11 @@
 import re
 import requests
 from requests.adapters import HTTPAdapter, Retry
+from logging import getLogger
 from typing import Optional, Dict, Any
 
 from ah.vendors.blizzardapi import BlizzardApi
+from ah.models import Namespace, FactionEnum
 from ah.cache import bound_cache, BoundCacheMixin, Cache
 from ah.defs import SECONDS_IN
 
@@ -21,49 +23,53 @@ class BNAPIWrapper(BoundCacheMixin):
         super().__init__(*args, cache=cache, **kwargs)
         self._api = BlizzardApi(client_id, client_secret)
 
-    @classmethod
-    def get_default_locale(cls, region: str) -> str:
-        if region == "kr":
-            return "ko_KR"
-        elif region == "tw":
-            return "zh_TW"
-        else:
-            return "en_US"
+    @bound_cache(SECONDS_IN.WEEK)
+    def get_connected_realms_index(self, namespace: Namespace) -> Any:
+        return self._api.wow.game_data.get_connected_realms_index(
+            namespace.region, namespace.get_locale(), namespace.to_str()
+        )
 
     @bound_cache(SECONDS_IN.WEEK)
-    def get_connected_realms_index(
-        self, region: str, locale: Optional[str] = None
-    ) -> Any:
-        if not locale:
-            locale = self.get_default_locale(region)
-        return self._api.wow.game_data.get_connected_realms_index(region, locale)
-
-    @bound_cache(SECONDS_IN.WEEK)
-    def get_connected_realm(
-        self, region: str, connected_realm_id: int, locale: Optional[str] = None
-    ) -> Any:
-        if not locale:
-            locale = self.get_default_locale(region)
+    def get_connected_realm(self, namespace: Namespace, connected_realm_id: int) -> Any:
         return self._api.wow.game_data.get_connected_realm(
-            region, locale, connected_realm_id
+            namespace.region,
+            namespace.get_locale(),
+            namespace.to_str(),
+            connected_realm_id,
         )
 
     @bound_cache(SECONDS_IN.HOUR)
     def get_auctions(
-        self, region: str, connected_realm_id: int, locale: Optional[str] = None
+        self,
+        namespace: Namespace,
+        connected_realm_id: int,
+        auction_house_id: int = None,
     ) -> Any:
-        if not locale:
-            locale = self.get_default_locale(region)
-        return self._api.wow.game_data.get_auctions(region, locale, connected_realm_id)
+        return self._api.wow.game_data.get_auctions(
+            namespace.region,
+            namespace.get_locale(),
+            namespace.to_str(),
+            connected_realm_id,
+            auction_house_id=auction_house_id,
+        )
 
     @bound_cache(SECONDS_IN.HOUR)
-    def get_commodities(self, region: str, locale: Optional[str] = None) -> Any:
-        if not locale:
-            locale = self.get_default_locale(region)
-        return self._api.wow.game_data.get_commodities(region, locale)
+    def get_commodities(self, namespace: Namespace) -> Any:
+        return self._api.wow.game_data.get_commodities(
+            namespace.region,
+            namespace.get_locale(),
+            namespace.to_str(),
+        )
 
 
 class BNAPI:
+    _logger = getLogger("BNAPI")
+
+    MAP_FACTION_AH_ID = {
+        FactionEnum.ALLIANCE: 2,
+        FactionEnum.HORDE: 6,
+    }
+
     def __init__(
         self,
         client_id: Optional[str] = None,
@@ -85,14 +91,14 @@ class BNAPI:
         else:
             self.wrapper = wrapper
 
-    def pull_connected_realms_ids(self, region: str) -> Any:
-        connected_realms = self.wrapper.get_connected_realms_index(region)
+    def pull_connected_realms_ids(self, namespace: Namespace) -> Any:
+        connected_realms = self.wrapper.get_connected_realms_index(namespace)
         for cr in connected_realms["connected_realms"]:
             ret = re.search(r"connected-realm/(\d+)", cr["href"])
             crid = ret.group(1)
             yield int(crid)
 
-    def pull_connected_realm(self, region: str, crid: int) -> Any:
+    def pull_connected_realm(self, namespace: Namespace, crid: int) -> Any:
         """
         >>> ret = {
             # crid
@@ -108,7 +114,7 @@ class BNAPI:
             ]
         }
         """
-        connected_realm = self.wrapper.get_connected_realm(region, crid)
+        connected_realm = self.wrapper.get_connected_realm(namespace, crid)
         ret = {"id": crid, "realms": []}
         for realm in connected_realm["realms"]:
             if "timezone" in ret and ret["timezone"] != realm["timezone"]:
@@ -130,7 +136,7 @@ class BNAPI:
 
         return ret
 
-    def pull_connected_realms(self, region: str) -> Any:
+    def pull_connected_realms(self, namespace: Namespace) -> Any:
         """
 
         >>> {
@@ -139,26 +145,34 @@ class BNAPI:
                 ...
             }
         """
-        crids = self.pull_connected_realms_ids(region)
+        crids = self.pull_connected_realms_ids(namespace)
         ret = {}
         for crid in crids:
-            connected_realm = self.pull_connected_realm(region, crid)
-            ret[crid] = connected_realm
+            try:
+                connected_realm = self.pull_connected_realm(namespace, crid)
+                ret[crid] = connected_realm
+            except Exception as e:
+                self._logger.error(f"Failed to pull connected realm data {crid}.")
+                self._logger.exception(e)
 
         return ret
 
-    def pull_commodities(self, region: str) -> Any:
-        commodities = self.wrapper.get_commodities(region)
+    def pull_commodities(self, namespace: Namespace) -> Any:
+        commodities = self.wrapper.get_commodities(namespace)
         return commodities
 
-    def pull_auctions(self, region: str, crid: int) -> Any:
-        auctions = self.wrapper.get_auctions(region, crid)
+    def pull_auctions(
+        self,
+        namespace: Namespace,
+        crid: int,
+        faction: FactionEnum = None,
+    ) -> Any:
+        auctions = self.wrapper.get_auctions(
+            namespace,
+            crid,
+            auction_house_id=self.MAP_FACTION_AH_ID.get(faction),
+        )
         return auctions
-
-    def get_timezone(self, region: str, connected_realm_id: int) -> str:
-        """NOTE: CRs under same region may have different timezones!"""
-        connected_realm = self._api.get_connected_realm(region, connected_realm_id)
-        return connected_realm["realms"][0]["timezone"]
 
 
 class GHAPI(BoundCacheMixin):
@@ -176,7 +190,7 @@ class GHAPI(BoundCacheMixin):
 
     @bound_cache(SECONDS_IN.HOUR)
     def get_assets_uri(self, owner: str, repo: str) -> Dict[str, str]:
-        url = "https://api.github.com/repos/{user}/{repo}/releases"
+        url = "https://api.github.com/repos/{user}/{repo}/releases/latest"
         if self.gh_proxy:
             # TODO: make it safe to use url without trailing slash
             url = self.gh_proxy + url
@@ -185,11 +199,40 @@ class GHAPI(BoundCacheMixin):
             **self.REQUESTS_KWARGS,
         )
         if resp.status_code != 200:
-            raise ValueError(f"Failed to get releases, code: {resp.status_code}")
-        releases = resp.json()
+            raise ValueError(f"Failed to get latest releases, code: {resp.status_code}")
+        latest_release = resp.json()
+        latest_release_id = latest_release["id"]
+
         ret = {}
-        for asset in releases[0]["assets"]:
-            ret[asset["name"]] = asset["browser_download_url"]
+        page = 0
+        per_page = 100
+        while True:
+            page += 1
+            url = (
+                "https://api.github.com/repos/{user}/{repo}/"
+                "releases/{release_id}/assets?page={page}per_page={per_page}"
+            )
+            resp = self.session.get(
+                url.format(
+                    user=owner,
+                    repo=repo,
+                    release_id=latest_release_id,
+                    page=page,
+                    per_page=per_page,
+                ),
+                **self.REQUESTS_KWARGS,
+            )
+            if resp.status_code != 200:
+                raise ValueError(
+                    f"Failed to get latest release assets, code: {resp.status_code}"
+                )
+
+            assets = resp.json()
+            for asset in assets:
+                ret[asset["name"]] = asset["browser_download_url"]
+
+            if len(assets) < per_page:
+                break
 
         return ret
 

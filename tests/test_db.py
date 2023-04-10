@@ -1,4 +1,5 @@
 from unittest import TestCase
+from typing import Optional
 import tempfile
 import json
 import gzip
@@ -12,11 +13,11 @@ from ah.models import (
     ItemStringTypeEnum,
     Namespace,
     DBTypeEnum,
-    DBType,
     NameSpaceCategoriesEnum,
     GameVersionEnum,
     DBFileName,
     DBExtEnum,
+    FactionEnum,
 )
 
 
@@ -33,13 +34,20 @@ class DummyGHAPI:
         n_item: int,
         n_record_per_item: int,
         ts_base: int,
+        faction: Optional[FactionEnum] = None,
     ) -> None:
         self.site = site
         self.category = category
         self.game_version = game_version
         self.region = region
         self.n_crid = n_crid
+        self.faction = faction
         db = MapItemStringMarketValueRecords()
+
+        if self.game_version != GameVersionEnum.RETAIL and self.faction is None:
+            raise ValueError(
+                f"faction must be specified for game_version={game_version!r}"
+            )
 
         for i_item in range(n_item):
             for i_record in range(n_record_per_item):
@@ -71,7 +79,9 @@ class DummyGHAPI:
         for n in range(self.n_crid):
             file_name = DBFileName(
                 namespace=namespace,
-                db_type=DBType(type=DBTypeEnum.AUCTIONS, crid=n),
+                db_type=DBTypeEnum.AUCTIONS,
+                crid=n,
+                faction=self.faction,
                 ext=DBExtEnum.GZ,
             )
             ret[str(file_name)] = f"{self.site}/{file_name}"
@@ -82,6 +92,14 @@ class DummyGHAPI:
             ext=DBExtEnum.JSON,
         )
         ret[str(meta_file_name)] = f"{self.site}/{meta_file_name}"
+
+        if self.game_version == GameVersionEnum.RETAIL:
+            commodity_file_name = DBFileName(
+                namespace=namespace,
+                db_type=DBTypeEnum.COMMODITIES,
+                ext=DBExtEnum.GZ,
+            )
+            ret[str(commodity_file_name)] = f"{self.site}/{commodity_file_name}"
         return ret
 
     def get_asset(self, url: str) -> bytes:
@@ -121,6 +139,7 @@ class TestAuctionDB(TestCase):
             2,
             2,
             ts_base,
+            faction=FactionEnum.HORDE,
         )
         fork_repo = "github.com/user/repo"
 
@@ -193,6 +212,7 @@ class TestAuctionDB(TestCase):
         n_crid: int,
         n_item: int,
         n_record_per_item: int,
+        faction: Optional[FactionEnum] = None,
     ):
         namespace = Namespace(
             category=category,
@@ -200,7 +220,9 @@ class TestAuctionDB(TestCase):
             region=region,
         )
         for crid in range(n_crid):
-            file = db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=crid)
+            file = db.get_file(
+                namespace, DBTypeEnum.AUCTIONS, crid=crid, faction=faction
+            )
             map_records = db.load_db(file)
             self.assertEqual(len(map_records), n_item)
             for item_string in map_records:
@@ -224,6 +246,7 @@ class TestAuctionDB(TestCase):
             game_version=game_version,
             region=region,
         )
+        faction = FactionEnum.HORDE
         gh_api = DummyGHAPI(
             site,
             category,
@@ -233,6 +256,7 @@ class TestAuctionDB(TestCase):
             n_item,
             n_record_per_item,
             ts_base,
+            faction=faction,
         )
 
         db = AuctionDB(
@@ -244,7 +268,14 @@ class TestAuctionDB(TestCase):
             gh_api=gh_api,
         )
         self.assert_db(
-            db, category, game_version, region, n_crid, n_item, n_record_per_item
+            db,
+            category,
+            game_version,
+            region,
+            n_crid,
+            n_item,
+            n_record_per_item,
+            faction=faction,
         )
 
         # test meta file
@@ -257,13 +288,25 @@ class TestAuctionDB(TestCase):
 
         # pick one of the db file for testing
         pick_crid = n_crid - 1
-        pick_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, pick_crid)
+        pick_file = db.get_file(
+            namespace,
+            DBTypeEnum.AUCTIONS,
+            crid=pick_crid,
+            faction=faction,
+        )
         pick_map = db.load_db(pick_file)
 
         # assert raises when file not in remote
-        bad_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, n_crid + 1)
+        bad_file = db.get_file(
+            namespace,
+            DBTypeEnum.AUCTIONS,
+            crid=n_crid + 1,
+            faction=faction,
+        )
         self.assertRaises(FileNotFoundError, db.fork_file, bad_file)
+        print("--------- expect raise ---------")
         self.assertFalse(db.load_db(bad_file))  # return empty map
+        print("--------------------------------")
 
         # assert raises when trying to update
         increment = MapItemStringMarketValueRecord()
@@ -299,7 +342,14 @@ class TestAuctionDB(TestCase):
         pick_map_ = db.load_db(pick_file)
         self.assertEqual(len(pick_map_), n_item)
         self.assert_db(
-            db, category, game_version, region, n_crid, n_item, n_record_per_item
+            db,
+            category,
+            game_version,
+            region,
+            n_crid,
+            n_item,
+            n_record_per_item,
+            faction=faction,
         )
 
     def test_mode_local_remote(self):
@@ -320,6 +370,7 @@ class TestAuctionDB(TestCase):
             game_version=game_version,
             region=region,
         )
+        faction = FactionEnum.ALLIANCE
         gh_api = DummyGHAPI(
             site,
             category,
@@ -329,6 +380,7 @@ class TestAuctionDB(TestCase):
             n_item,
             n_record_per_item,
             ts_base,
+            faction=faction,
         )
 
         db = AuctionDB(
@@ -340,12 +392,24 @@ class TestAuctionDB(TestCase):
             gh_api=gh_api,
         )
         self.assert_db(
-            db, category, game_version, region, n_crid, n_item, n_record_per_item
+            db,
+            category,
+            game_version,
+            region,
+            n_crid,
+            n_item,
+            n_record_per_item,
+            faction=faction,
         )
 
         # pick one of the db file for testing
         pick_crid = n_crid - 1
-        pick_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=pick_crid)
+        pick_file = db.get_file(
+            namespace,
+            DBTypeEnum.AUCTIONS,
+            crid=pick_crid,
+            faction=faction,
+        )
 
         # update local
         new_item_string = ItemString(
@@ -413,7 +477,9 @@ class TestAuctionDB(TestCase):
 
         # pick one of the db file for testing
         pick_crid = 1
-        pick_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=pick_crid)
+        pick_file = db.get_file(
+            namespace, DBTypeEnum.AUCTIONS, crid=pick_crid, faction=FactionEnum.HORDE
+        )
         pick_item_id = 1
         pick_ts = 1000
 
@@ -492,12 +558,16 @@ class TestAuctionDB(TestCase):
         pick_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=pick_crid)
         pick_map = db.load_db(pick_file)
         pick_map_ = db.load_db(pick_file.file_name)
+        self.assertTrue(pick_map)
+        self.assertTrue(pick_map_)
         self.assertEqual(pick_map.to_protobuf_bytes(), pick_map_.to_protobuf_bytes())
 
         pick_crid = None
         pick_file = db.get_file(namespace, DBTypeEnum.COMMODITIES, crid=pick_crid)
         pick_map = db.load_db(pick_file)
         pick_map_ = db.load_db(pick_file.file_name)
+        self.assertTrue(pick_map)
+        self.assertTrue(pick_map_)
         self.assertEqual(pick_map.to_protobuf_bytes(), pick_map_.to_protobuf_bytes())
 
     @classmethod
@@ -508,7 +578,9 @@ class TestAuctionDB(TestCase):
             region=region,
         )
         db_type_e = DBTypeEnum.AUCTIONS
-        db_file = db.get_file(namespace, db_type_e, crid)
+        db_file = db.get_file(
+            namespace, db_type_e, crid=crid, faction=FactionEnum.ALLIANCE
+        )
         db_file.touch()
         return db_file.file_name
 
@@ -531,5 +603,4 @@ class TestAuctionDB(TestCase):
         for crid in range(n_crid):
             fn = self.make_db_file(db, region, crid)
             expected.add(fn)
-
         self.assertEqual(set(db.list_file()), expected)

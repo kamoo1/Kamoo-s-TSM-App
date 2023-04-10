@@ -10,7 +10,7 @@ from ah.models.self import (
     DBExtEnum,
     DBFileName,
     DBTypeEnum,
-    DBType,
+    FactionEnum,
 )
 
 
@@ -69,28 +69,24 @@ class TestModels(TestCase):
             game_version=GameVersionEnum.CLASSIC,
             region=RegionEnum.US,
         )
+        ns_r = Namespace(
+            category=NameSpaceCategoriesEnum.DYNAMIC,
+            game_version=GameVersionEnum.RETAIL,
+            region=RegionEnum.US,
+        )
 
         name = DBFileName(
             namespace=ns,
-            db_type=DBType(type=DBTypeEnum.AUCTIONS, crid=123),
+            db_type=DBTypeEnum.AUCTIONS,
+            crid=123,
+            faction=FactionEnum.HORDE,
             ext=DBExtEnum.GZ,
         )
-        expected = "dynamic-classic1x-us_auctions123.gz"
+        expected = "dynamic-classic1x-us_auctions_123_h.gz"
         self.assertEqual(name.to_str(), expected)
         name_ = DBFileName.from_str(expected)
         self.assertTrue(name == name_)
         self.assertTrue(name.is_compress())
-
-        name = DBFileName(
-            namespace=ns,
-            db_type=DBTypeEnum.COMMODITIES,
-            ext=DBExtEnum.BIN,
-        )
-        expected = "dynamic-classic1x-us_commodities.bin"
-        self.assertEqual(name.to_str(), expected)
-        name_ = DBFileName.from_str(expected)
-        self.assertTrue(name == name_)
-        self.assertFalse(name.is_compress())
 
         name = DBFileName(
             namespace=ns,
@@ -104,7 +100,8 @@ class TestModels(TestCase):
 
         name = DBFileName(
             namespace=ns,
-            db_type=DBType(type=DBTypeEnum.META, crid=None),
+            db_type=DBTypeEnum.META,
+            crid=None,
             ext=DBExtEnum.JSON,
         )
         expected = "dynamic-classic1x-us_meta.json"
@@ -115,7 +112,8 @@ class TestModels(TestCase):
         # uses json by default for meta
         name = DBFileName(
             namespace=ns,
-            db_type=DBType(type=DBTypeEnum.META),
+            db_type=DBTypeEnum.META,
+            ext=DBExtEnum.JSON,
         )
         expected = "dynamic-classic1x-us_meta.json"
         self.assertEqual(name.to_str(), expected)
@@ -124,17 +122,30 @@ class TestModels(TestCase):
 
         name = DBFileName(
             namespace=ns.to_str(),
-            db_type="auctions123",
+            db_type="auctions",
+            crid=123,
+            faction=FactionEnum.ALLIANCE,
             ext="gz",
         )
-        expected = "dynamic-classic1x-us_auctions123.gz"
+        expected = "dynamic-classic1x-us_auctions_123_a.gz"
 
         name = DBFileName(
-            namespace=ns.to_str(),
+            namespace=ns_r,
+            db_type=DBTypeEnum.COMMODITIES,
+            ext=DBExtEnum.BIN,
+        )
+        expected = "dynamic-us_commodities.bin"
+        self.assertEqual(name.to_str(), expected)
+        name_ = DBFileName.from_str(expected)
+        self.assertTrue(name == name_)
+        self.assertFalse(name.is_compress())
+
+        name = DBFileName(
+            namespace=ns_r.to_str(),
             db_type="commodities",
             ext="bin",
         )
-        expected = "dynamic-classic1x-us_commodities.bin"
+        expected = "dynamic-us_commodities.bin"
 
         with self.assertRaises(ValueError):
             DBFileName(
@@ -188,69 +199,103 @@ class TestModels(TestCase):
         with self.assertRaises(ValueError):
             name = DBFileName(
                 namespace=ns,
-                db_type=DBType(type=DBTypeEnum.COMMODITIES, crid=123),
+                db_type=DBTypeEnum.COMMODITIES,
+                crid=123,
                 ext=DBExtEnum.GZ,
             )
 
         with self.assertRaises(ValueError):
             name = DBFileName(
                 namespace=ns,
-                db_type=DBType(type=DBTypeEnum.AUCTIONS, crid=None),
+                db_type=DBTypeEnum.AUCTIONS,
+                crid=None,
                 ext=DBExtEnum.GZ,
             )
 
         with self.assertRaises(ValueError):
             name = DBFileName(
                 namespace=ns,
-                db_type=DBType(type=DBTypeEnum.AUCTIONS),
+                db_type=DBTypeEnum.AUCTIONS,
                 ext=DBExtEnum.GZ,
             )
 
         with self.assertRaises(ValueError):
             name = DBFileName(
                 namespace=ns,
-                db_type=DBType(type=DBTypeEnum.AUCTIONS, crid=123),
+                db_type=DBTypeEnum.AUCTIONS,
+                crid=123,
                 ext=DBExtEnum.JSON,
             )
 
         with self.assertRaises(ValueError):
             name = DBFileName(
                 namespace=ns,
-                db_type=DBType(type=DBTypeEnum.COMMODITIES),
+                db_type=DBTypeEnum.COMMODITIES,
                 ext=DBExtEnum.JSON,
             )
 
         with self.assertRaises(ValueError):
             name = DBFileName(
                 namespace=ns,
-                db_type=DBType(type=DBTypeEnum.META),
+                db_type=DBTypeEnum.META,
                 ext=DBExtEnum.BIN,
             )
 
         with self.assertRaises(ValueError):
             name = DBFileName(
                 namespace=ns,
-                db_type=DBType(type=DBTypeEnum.META, crid=123),
+                db_type=DBTypeEnum.META,
+                crid=123,
                 ext=DBExtEnum.JSON,
             )
 
-        with self.assertRaises(ValueError):
-            DBFileName.from_str("dynamic-classic1x-us_auctions.bin")
+        with self.assertRaises(TypeError):
+            # file ext is no longer optional
+            name = DBFileName(
+                namespace=ns,
+                db_type=DBTypeEnum.META,
+            )
 
+        DBFileName.from_str("dynamic-classic1x-us_auctions_123_h.bin")
         with self.assertRaises(ValueError):
-            DBFileName.from_str("dynamic-classic1x-us_commodities123.bin")
+            DBFileName.from_str("dynamic-classic1x-us_auctions_h.bin")
 
+        DBFileName.from_str("dynamic-us_commodities.bin")
         with self.assertRaises(ValueError):
-            DBFileName.from_str("dynamic-classic1x-us_xxx123.gz")
+            DBFileName.from_str("dynamic-us_commodities_123.bin")
 
+        DBFileName.from_str("dynamic-classic1x-us_auctions_123_a.gz")
         with self.assertRaises(ValueError):
-            DBFileName.from_str("dynamic-classic1x-us_commodities.xxx")
+            DBFileName.from_str("dynamic-classic1x-us_xxx_123_a.gz")
 
+        DBFileName.from_str("dynamic-us_commodities.gz")
         with self.assertRaises(ValueError):
-            DBFileName.from_str("xxx-classic1x-us_auctions123.gz")
+            DBFileName.from_str("dynamic-us_commodities.xxx")
 
+        DBFileName.from_str("dynamic-classic1x-us_auctions_123_a.gz")
+        with self.assertRaises(ValueError):
+            DBFileName.from_str("xxx-classic1x-us_auctions_123_a.gz")
+
+        DBFileName.from_str("dynamic-classic1x-us_meta.json")
         with self.assertRaises(ValueError):
             DBFileName.from_str("dynamic-classic1x-us_meta.gz")
 
+        DBFileName.from_str("dynamic-classic1x-us_meta.json")
         with self.assertRaises(ValueError):
             DBFileName.from_str("dynamic-classic1x-us_meta.bin")
+
+        DBFileName.from_str("dynamic-classic1x-us_auctions_123_a.gz")
+        with self.assertRaises(ValueError):
+            DBFileName.from_str("dynamic-classic1x-us_auctions_123.gz")
+
+        DBFileName.from_str("dynamic-classic1x-us_auctions_123_h.gz")
+        with self.assertRaises(ValueError):
+            DBFileName.from_str("dynamic-classic1x-us_auctions_123_x.gz")
+
+        DBFileName.from_str("dynamic-us_auctions_123.gz")
+        with self.assertRaises(ValueError):
+            DBFileName.from_str("dynamic-us_auctions_123_h.gz")
+
+        DBFileName.from_str("dynamic-us_commodities.bin")
+        with self.assertRaises(ValueError):
+            DBFileName.from_str("dynamic-classic1x-us_commodities.bin")
