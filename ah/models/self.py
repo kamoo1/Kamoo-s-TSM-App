@@ -905,6 +905,7 @@ class MapItemStringMarketValueRecord(_RootDictMixin[ItemString, MarketValueRecor
     def from_response(
         cls,
         response: GenericAuctionsResponseInterface,
+        game_version: GameVersionEnum = GameVersionEnum.RETAIL,
     ) -> "MapItemStringMarketValueRecord":
         obj = cls()
         # >>> {item_string: [total_quantity, [(price, quantity), ...]]}
@@ -917,6 +918,10 @@ class MapItemStringMarketValueRecord(_RootDictMixin[ItemString, MarketValueRecor
             # for commodity, price = .buyout; buyout = .buyout
             price = auction.get_price()
             buyout = auction.get_buyout()
+            if game_version in (GameVersionEnum.CLASSIC, GameVersionEnum.CLASSIC_WLK):
+                # for classic, prices are per stack
+                buyout = None if buyout is None else buyout // quantity
+                price = None if price is None else price // quantity
 
             if item_string not in temp:
                 # >>> [total_quantity, min_buyout, [(price, quantity), ...]]
@@ -928,6 +933,7 @@ class MapItemStringMarketValueRecord(_RootDictMixin[ItemString, MarketValueRecor
             ):
                 temp[item_string][1] = buyout
 
+            # we're using bid as price for auctions without buyout
             heappush(temp[item_string][2], (price, quantity))
 
         for item_string in temp:
