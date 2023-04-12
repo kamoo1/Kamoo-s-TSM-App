@@ -54,7 +54,9 @@ class Updater:
                 self._logger.exception(f"Failed to request commodities for {namespace}")
                 return
 
-        increment = MapItemStringMarketValueRecord.from_response(resp)
+        increment = MapItemStringMarketValueRecord.from_response(
+            resp, namespace.game_version
+        )
         return increment
 
     def update_region_dbs(self, namespace: Namespace) -> Tuple[int, int]:
