@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import argparse
 
@@ -28,10 +29,17 @@ def rename_db_files(db_path: str):
         move(os.path.join(db_path, src), os.path.join(db_path, dst))
 
 
+def exec(command: str):
+    # run bash command
+    print(f"Running command: {command}")
+    os.system(command)
+
+
 def main(db_path: str = None):
     before_fns = list(os.listdir(db_path))
     print(f"Before files: {before_fns}")
-    rename_db_files(db_path)
+    # rename_db_files(db_path)
+    exec(f"cd {db_path} && rm *classic*")
     before_fns = list(os.listdir(db_path))
     print(f"After files: {before_fns}")
 
