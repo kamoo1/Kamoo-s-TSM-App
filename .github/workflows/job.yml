@@ -56,7 +56,7 @@ jobs:
       run: >
         printf %s\\n retail tw classic tw classic_wlk tw 
         retail kr classic kr classic_wlk kr | 
-        xargs -n2 -P0 
+        xargs -n2 
         python -m ah.updater 
         --db_path ${{ env.DB_PATH }} 
         --game_version 
