@@ -4,7 +4,7 @@ import os
 import json
 import logging
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Optional, Any
 
 from ah.storage import BinaryFile, TextFile, BaseFile
 from ah.models import (
@@ -17,9 +17,9 @@ from ah.models import (
     FactionEnum,
 )
 from ah.defs import SECONDS_IN
-from typing import Dict, Optional, Any
 from ah import config
 
+# we only need this for type checking, to avoid circular import
 if TYPE_CHECKING:
     from ah.api import GHAPI
 
