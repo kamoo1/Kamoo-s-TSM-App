@@ -188,7 +188,7 @@ class GHAPI(BoundCacheMixin):
         self.session.mount("http://", HTTPAdapter(max_retries=retries))
         super().__init__(cache=cache)
 
-    @bound_cache(SECONDS_IN.HOUR)
+    @bound_cache(10 * SECONDS_IN.MIN)
     def get_assets_uri(self, owner: str, repo: str) -> Dict[str, str]:
         url = "https://api.github.com/repos/{user}/{repo}/releases/latest"
         if self.gh_proxy:
@@ -236,7 +236,7 @@ class GHAPI(BoundCacheMixin):
 
         return ret
 
-    @bound_cache(SECONDS_IN.HOUR)
+    @bound_cache(10 * SECONDS_IN.MIN)
     def get_asset(self, url: str) -> bytes:
         if self.gh_proxy:
             url = self.gh_proxy + url
