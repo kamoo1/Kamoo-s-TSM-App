@@ -1,3 +1,4 @@
+import sys
 from typing import ClassVar, Generic, Iterator, TypeVar, Callable, Type, Any
 from logging import getLogger, Logger
 
@@ -8,6 +9,8 @@ __all__ = (
     "_RootListMixin",
     "_RootDictMixin",
     "ConverterWrapper",
+    "StrEnum_",
+    "IntEnum_",
 )
 
 _VT = TypeVar("_VT")
@@ -15,6 +18,23 @@ _KT = TypeVar("_KT")
 
 _ITEMS_T = TypeVar("_ITEMS_T")
 _ITEM_T = TypeVar("_ITEM_T")
+
+
+# if python 3.11+, use `enum.StrEnum` instead of `str, enum.Enum`
+# https://github.com/python/cpython/issues/100458
+if sys.version_info >= (3, 11):
+    from enum import StrEnum as StrEnum_, IntEnum as IntEnum_
+
+else:
+    from enum import Enum
+
+    # Note: must not use `type`
+    # https://stackoverflow.com/questions/69328274
+    class StrEnum_(str, Enum):
+        pass
+
+    class IntEnum_(int, Enum):
+        pass
 
 
 class ConverterWrapper:

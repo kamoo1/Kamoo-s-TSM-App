@@ -1,5 +1,4 @@
 from functools import partial
-from enum import Enum
 from heapq import heappush, heappop
 from collections import defaultdict
 from logging import Logger, getLogger
@@ -30,6 +29,8 @@ from ah.models.base import (
     _RootDictMixin,
     _RootListMixin,
     ConverterWrapper as CW,
+    StrEnum_,
+    IntEnum_,
 )
 from ah.models.blizzard import (
     Namespace,
@@ -79,13 +80,13 @@ data = {
 """
 
 
-class DBTypeEnum(str, Enum):
+class DBTypeEnum(StrEnum_):
     AUCTIONS = "auctions"
     COMMODITIES = "commodities"
     META = "meta"
 
 
-class DBExtEnum(str, Enum):
+class DBExtEnum(StrEnum_):
     GZ = "gz"
     BIN = "bin"
     JSON = "json"
@@ -467,12 +468,12 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
             return 0
 
 
-class ItemStringTypeEnum(str, Enum):
+class ItemStringTypeEnum(StrEnum_):
     PET = "p"
     ITEM = "i"
 
 
-class ILVL_MODIFIERS_TYPES(int, Enum):
+class ILVL_MODIFIERS_TYPES(IntEnum_):
     ABS_ILVL = -1
     REL_ILVL = -2
 

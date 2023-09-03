@@ -1,8 +1,6 @@
 from __future__ import annotations
-import os
 import abc
 import time
-from enum import Enum
 from typing import (
     List,
     Iterator,
@@ -17,10 +15,11 @@ from typing import (
 
 from pydantic import Field, root_validator
 
-from ah.models.base import _BaseModel
+from ah.models.base import _BaseModel, StrEnum_
 
 if TYPE_CHECKING:
     from ah.api import BNAPI
+
 
 __all__ = (
     "FactionEnum",
@@ -41,7 +40,7 @@ __all__ = (
 )
 
 
-class FactionEnum(str, Enum):
+class FactionEnum(StrEnum_):
     ALLIANCE = "a"
     HORDE = "h"
 
@@ -54,19 +53,19 @@ class FactionEnum(str, Enum):
             raise ValueError(f"Invalid faction: {self}")
 
 
-class RegionEnum(str, Enum):
+class RegionEnum(StrEnum_):
     US = "us"
     EU = "eu"
     KR = "kr"
     TW = "tw"
 
 
-class NameSpaceCategoriesEnum(str, Enum):
+class NameSpaceCategoriesEnum(StrEnum_):
     DYNAMIC = "dynamic"
     STATIC = "static"
 
 
-class GameVersionEnum(str, Enum):
+class GameVersionEnum(StrEnum_):
     CLASSIC = "classic1x"
     CLASSIC_WLK = "classic"
     RETAIL = ""
@@ -134,7 +133,7 @@ class Namespace(_BaseModel):
         frozen = True
 
 
-class TimeLeft(str, Enum):
+class TimeLeft(StrEnum_):
     VERY_LONG = "VERY_LONG"
     LONG = "LONG"
     MEDIUM = "MEDIUM"
