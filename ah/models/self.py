@@ -462,9 +462,10 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
         if sum_weights:
             return int(sum_market_value / sum_weights + 0.5)
         else:
-            self._logger.debug(
-                f"{self}: all records expired, get_weighted_market_value() returns 0"
-            )
+            # XXX: This occurs fairly often, if no records found in recent 15 days
+            # self._logger.debug(
+            #     f"{self}: all records expired, get_weighted_market_value() returns 0"
+            # )
             return 0
 
 

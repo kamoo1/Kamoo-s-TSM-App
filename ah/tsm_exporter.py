@@ -215,7 +215,13 @@ class TSMExporter:
                 item_data.append(value)
 
             if is_skip_item:
-                cls._logger.debug(f"Skip item {item_string} due to no data.")
+                # XXX: this occurs very often for 15-day and last scan data types,
+                # because records outside the time range are still there, therefore
+                # the item entry (item string) too.
+                # cls._logger.debug(
+                #     f"During {type_}, {item_string} skipped, "
+                #     f"due to all fields are empty."
+                # )
                 continue
 
             item_text = "{" + ",".join(item_data) + "}"
