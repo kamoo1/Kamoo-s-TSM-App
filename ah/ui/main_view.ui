@@ -1,0 +1,383 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>305</width>
+    <height>325</height>
+   </rect>
+  </property>
+  <property name="contextMenuPolicy">
+   <enum>Qt::DefaultContextMenu</enum>
+  </property>
+  <property name="windowTitle">
+   <string>AH</string>
+  </property>
+  <property name="unifiedTitleAndToolBarOnMac">
+   <bool>false</bool>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
+    <item>
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <property name="tabBarAutoHide">
+       <bool>false</bool>
+      </property>
+      <widget class="QWidget" name="tab_exporter">
+       <attribute name="title">
+        <string>Exporter</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <item>
+         <widget class="QWidget" name="widget" native="true">
+          <layout class="QHBoxLayout" name="horizontalLayout">
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QWidget" name="widget_3" native="true">
+          <layout class="QHBoxLayout" name="horizontalLayout_3">
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QComboBox" name="comboBox_exporter_region">
+             <property name="currentText">
+              <string/>
+             </property>
+             <property name="placeholderText">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboBox_exporter_game_version">
+             <property name="placeholderText">
+              <string/>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QListView" name="listView_exporter_realms"/>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="checkBox_exporter_remote">
+          <property name="toolTip">
+           <string>Overwrite local with remote DB on Github</string>
+          </property>
+          <property name="text">
+           <string>Remote Mode</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_exporter_export">
+          <property name="text">
+           <string>Export</string>
+          </property>
+          <property name="flat">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tab_updater">
+       <attribute name="title">
+        <string>Updater</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_4">
+        <item>
+         <widget class="QLabel" name="label_updater_id">
+          <property name="text">
+           <string>Battle.net Client ID</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="lineEdit_updater_id">
+          <property name="inputMask">
+           <string/>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+          <property name="echoMode">
+           <enum>QLineEdit::Password</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="label_updater_secret">
+          <property name="text">
+           <string>Battle.net Client Secret</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="lineEdit_updater_secret">
+          <property name="inputMask">
+           <string/>
+          </property>
+          <property name="echoMode">
+           <enum>QLineEdit::Password</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="checkBox_updater_remote">
+          <property name="toolTip">
+           <string>Fork from Github when local DB not exist.</string>
+          </property>
+          <property name="text">
+           <string>Remote Mode</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_updater_update">
+          <property name="text">
+           <string>Update</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="verticalSpacer_2">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tab_settings">
+       <attribute name="title">
+        <string>Settings</string>
+       </attribute>
+       <layout class="QGridLayout" name="gridLayout">
+        <item row="2" column="1">
+         <widget class="QLabel" name="label_settings_game_path">
+          <property name="text">
+           <string>World of Warcraft Install Path</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="2">
+         <widget class="QToolButton" name="toolButton_settings_game_path">
+          <property name="text">
+           <string>...</string>
+          </property>
+          <property name="toolButtonStyle">
+           <enum>Qt::ToolButtonIconOnly</enum>
+          </property>
+          <property name="arrowType">
+           <enum>Qt::NoArrow</enum>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QLineEdit" name="lineEdit_settings_game_path">
+          <property name="toolTip">
+           <string>Base path of WoW, e.g. 'C:\Program Files (x86)\World of Warcraft'</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="1">
+         <widget class="QLabel" name="label_settings_gh_proxy">
+          <property name="text">
+           <string>Github Proxy</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>Remote Source</string>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="1">
+         <spacer name="verticalSpacer">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item row="7" column="2">
+         <widget class="QCheckBox" name="checkBox_settings_gh_proxy">
+          <property name="text">
+           <string>Enable</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="1">
+         <widget class="QLineEdit" name="lineEdit_settings_gh_proxy">
+          <property name="toolTip">
+           <string>Proxy of Github, for those who unable to access behind a firewall.</string>
+          </property>
+          <property name="text">
+           <string>https://worker.moonglade.site</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="1">
+         <widget class="QLineEdit" name="lineEdit_settings_repo">
+          <property name="toolTip">
+           <string>Used as source in remote mode, also for software update. Only accepting Github.</string>
+          </property>
+          <property name="text">
+           <string>https://github.com/kamoo1/TSM-Backend</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="label_settings_db_path">
+          <property name="text">
+           <string>Local DB Path</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="lineEdit_settings_db_path">
+          <property name="toolTip">
+           <string>Local DB path, defaults to 'db' (under current folder)</string>
+          </property>
+          <property name="text">
+           <string>db</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QToolButton" name="toolButton_settings_db_path">
+          <property name="text">
+           <string>...</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tab_log">
+       <attribute name="title">
+        <string>Log</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout">
+        <item>
+         <widget class="QWidget" name="widget_2" native="true">
+          <layout class="QHBoxLayout" name="horizontalLayout_2">
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="label_log_log_level">
+             <property name="text">
+              <string>Logging Level</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboBox_log_log_level"/>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPlainTextEdit" name="plainTextEdit_log_log">
+          <property name="undoRedoEnabled">
+           <bool>false</bool>
+          </property>
+          <property name="lineWrapMode">
+           <enum>QPlainTextEdit::NoWrap</enum>
+          </property>
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>checkBox_settings_gh_proxy</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>lineEdit_settings_gh_proxy</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>282</x>
+     <y>206</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>216</x>
+     <y>208</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>
