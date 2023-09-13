@@ -3,6 +3,7 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 from logging import getLogger
 from typing import Optional, Dict, Any
+from urllib.parse import urlparse
 
 from ah.vendors.blizzardapi import BlizzardApi
 from ah.models import Namespace, FactionEnum
@@ -180,6 +181,8 @@ class GHAPI(BoundCacheMixin):
 
     def __init__(self, cache: Cache, gh_proxy=None) -> None:
         self.gh_proxy = gh_proxy
+        if self.gh_proxy and self.gh_proxy[-1] != "/":
+            self.gh_proxy += "/"
         self.session = requests.Session()
         retries = Retry(
             total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
@@ -188,11 +191,22 @@ class GHAPI(BoundCacheMixin):
         self.session.mount("http://", HTTPAdapter(max_retries=retries))
         super().__init__(cache=cache)
 
+    @classmethod
+    def validate_gh_proxy(cls, gh_proxy: str) -> None:
+        if not gh_proxy:
+            return False
+
+        try:
+            result = urlparse(gh_proxy)
+            return all([result.scheme, result.netloc])
+
+        except Exception:
+            return False
+
     @bound_cache(10 * SECONDS_IN.MIN)
     def get_assets_uri(self, owner: str, repo: str) -> Dict[str, str]:
         url = "https://api.github.com/repos/{user}/{repo}/releases/latest"
         if self.gh_proxy:
-            # TODO: make it safe to use url without trailing slash
             url = self.gh_proxy + url
         resp = self.session.get(
             url.format(user=owner, repo=repo),
