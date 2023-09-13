@@ -150,7 +150,7 @@ class AuctionDB:
             file.use_compression = original_use_compression
 
     @singledispatchmethod
-    def load_db(self, file) -> "MapItemStringMarketValueRecords":
+    def load_db(self, file: BinaryFile | str) -> "MapItemStringMarketValueRecords":
         raise NotImplementedError(f"load_db not implemented for {type(file)!r}")
 
     @load_db.register
@@ -226,7 +226,12 @@ class AuctionDB:
                     f"Failed to download {file.file_name!r} from {self.fork_repo!r}"
                 )
 
-    def load_meta(self, file: TextFile) -> Dict[str, Any]:
+    @singledispatchmethod
+    def load_meta(self, file: TextFile | Namespace) -> Dict[str, Any]:
+        raise NotImplementedError(f"load_meta not implemented for {type(file)!r}")
+
+    @load_meta.register
+    def _(self, file: TextFile) -> Dict[str, Any]:
         self.ensure_file(file)
         if file.exists():
             with file.open("r") as f:
@@ -235,6 +240,11 @@ class AuctionDB:
             meta = {}
 
         return meta
+
+    @load_meta.register
+    def _(self, namespace: Namespace) -> Dict[str, Any]:
+        file = self.get_file(namespace, DBTypeEnum.META)
+        return self.load_meta(file)
 
     def update_meta(
         self,
