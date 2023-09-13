@@ -106,9 +106,12 @@ class TSMExporter:
         self.export_file = export_file
 
     @classmethod
-    def get_tsm_appdata_path(cls, warcraft_path: str) -> str:
+    def get_tsm_appdata_path(
+        cls, warcraft_base: str, game_version: GameVersionEnum
+    ) -> str:
         return os.path.join(
-            warcraft_path,
+            warcraft_base,
+            game_version.get_version_folder_name(),
             "Interface",
             "AddOns",
             "TradeSkillMaster_AppHelper",
@@ -116,11 +119,11 @@ class TSMExporter:
         )
 
     @classmethod
-    def find_warcraft_base_windows(cls) -> str:
+    def find_warcraft_base(cls) -> Optional[str]:
         if sys.platform == "win32":
             import winreg
         else:
-            raise RuntimeError("Only support windows")
+            return None
 
         key = winreg.OpenKey(
             winreg.HKEY_LOCAL_MACHINE,
@@ -129,6 +132,22 @@ class TSMExporter:
         path = winreg.QueryValueEx(key, "InstallPath")[0]
         path = os.path.join(path, "..")
         return os.path.normpath(path)
+
+    @classmethod
+    def validate_warcraft_base(cls, path: str) -> bool:
+        if not path or not os.path.isdir(path):
+            return False
+
+        # at least one version folder should exist
+        version_dirs = (
+            version.get_version_folder_name() for version in GameVersionEnum
+        )
+        if not any(
+            os.path.isdir(os.path.join(path, version)) for version in version_dirs
+        ):
+            return False
+
+        return True
 
     @classmethod
     def baseN(cls, num, b, numerals="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
@@ -382,8 +401,7 @@ def main(
     else:
         mode = AuctionDB.MODE_LOCAL_RW
 
-    warcraft_path = os.path.join(warcraft_base, game_version.get_version_folder_name())
-    export_path = TSMExporter.get_tsm_appdata_path(warcraft_path)
+    export_path = TSMExporter.get_tsm_appdata_path(warcraft_base, game_version)
     db = AuctionDB(
         db_path,
         config.MARKET_VALUE_RECORD_EXPIRES,
@@ -408,10 +426,7 @@ def parse_args(raw_args):
     parser = argparse.ArgumentParser()
     default_db_path = config.DEFAULT_DB_PATH
     default_game_version = GameVersionEnum.RETAIL.name.lower()
-    try:
-        default_warcraft_base = TSMExporter.find_warcraft_base_windows()
-    except Exception:
-        default_warcraft_base = None
+    default_warcraft_base = TSMExporter.find_warcraft_base()
 
     parser.add_argument(
         "--db_path",
@@ -463,10 +478,11 @@ def parse_args(raw_args):
         help="Realms to export, separated by space.",
     )
     args = parser.parse_args(raw_args)
-    if not args.warcraft_base:
+
+    if not TSMExporter.validate_warcraft_base(args.warcraft_base):
         raise ValueError(
-            "Unable to locate Warcraft installation directory, "
-            "please specify it with --warcraft_base option. "
+            "Invalid Warcraft installation directory, "
+            "please specify it via '--warcraft_base' option. "
             "Should be something like 'C:\\path_to\\World of Warcraft'."
         )
     args.game_version = GameVersionEnum[args.game_version.upper()]
