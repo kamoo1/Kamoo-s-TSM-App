@@ -198,7 +198,9 @@ class GHAPI(BoundCacheMixin):
 
         try:
             result = urlparse(gh_proxy)
-            return all([result.scheme, result.netloc])
+            return all(
+                [result.scheme, result.netloc, result.scheme in ["http", "https"]]
+            )
 
         except Exception:
             return False
