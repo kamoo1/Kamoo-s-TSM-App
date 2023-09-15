@@ -7,7 +7,7 @@ from typing import Optional, Tuple
 import platform
 import psutil
 
-from ah.api import BNAPI
+from ah.api import BNAPI, GHAPI
 from ah.models import (
     AuctionsResponse,
     CommoditiesResponse,
@@ -43,15 +43,19 @@ class Updater:
                     self.bn_api, namespace, crid, faction=faction
                 )
             except Exception:
-                self._logger.exception(
-                    f"Failed to request auctions for {namespace} {crid} {faction!s}"
+                self._logger.warning(
+                    f"Failed to request auctions for {namespace} {crid} {faction!s}",
+                    exc_info=True,
                 )
                 return
         else:
             try:
                 resp = CommoditiesResponse.from_api(self.bn_api, namespace)
             except Exception:
-                self._logger.exception(f"Failed to request commodities for {namespace}")
+                self._logger.warning(
+                    f"Failed to request commodities for {namespace}",
+                    exc_info=True,
+                )
                 return
 
         increment = MapItemStringMarketValueRecord.from_response(
@@ -137,22 +141,34 @@ class Updater:
 
 def main(
     db_path: str = None,
+    repo: str = None,
+    gh_proxy: str = None,
     game_version: GameVersionEnum = None,
     region: RegionEnum = None,
+    # below are for testability
     cache: Cache = None,
+    gh_api: GHAPI = None,
     bn_api: BNAPI = None,
 ):
-    if bn_api is None:
-        if cache is None:
-            cache_path = config.DEFAULT_CACHE_PATH
-            cache = Cache(cache_path)
-        bn_api = BNAPI(
-            config.BN_CLIENT_ID,
-            config.BN_CLIENT_SECRET,
-            cache,
-        )
+    cache = cache or Cache(config.DEFAULT_CACHE_PATH)
+    if repo:
+        mode = AuctionDB.MODE_REMOTE_R_LOCAL_RW
+        gh_api = gh_api or GHAPI(cache, gh_proxy)
+    else:
+        mode = AuctionDB.MODE_LOCAL_RW
+
+    bn_api = bn_api or BNAPI(
+        config.BN_CLIENT_ID,
+        config.BN_CLIENT_SECRET,
+        cache,
+    )
     db = AuctionDB(
-        db_path, config.MARKET_VALUE_RECORD_EXPIRES, config.DEFAULT_DB_COMPRESS
+        db_path,
+        config.MARKET_VALUE_RECORD_EXPIRES,
+        config.DEFAULT_DB_COMPRESS,
+        mode=mode,
+        fork_repo=repo,
+        gh_api=gh_api,
     )
     namespace = Namespace(
         category=NameSpaceCategoriesEnum.DYNAMIC,
@@ -176,6 +192,24 @@ def parse_args(raw_args):
         type=str,
     )
     parser.add_argument(
+        "--repo",
+        type=str,
+        default=None,
+        help="Address of Github repo that's hosting the db files. If given, "
+        "download and use repo's db if local does not exist, "
+        "otherwise use local db straight away. ",
+    )
+    parser.add_argument(
+        "--gh_proxy",
+        type=str,
+        default=None,
+        help="URL of Github proxy server, for people having trouble accessing Github "
+        "while using --repo option. "
+        "Read more at https://github.com/crazypeace/gh-proxy, "
+        "this program need a modified version that hosts API requests: "
+        "https://github.com/hunshcn/gh-proxy/issues/44",
+    )
+    parser.add_argument(
         "--game_version",
         choices={e.name.lower() for e in GameVersionEnum},
         default=default_game_version,
@@ -187,6 +221,17 @@ def parse_args(raw_args):
         help="Region to export",
     )
     args = parser.parse_args(raw_args)
+
+    if args.repo and not AuctionDB.validate_repo(args.repo):
+        raise ValueError(
+            f"Invalid Github repo given by '--repo' option, "
+            f"it should be a valid Github repo URL, not {args.repo!r}."
+        )
+    if args.repo and args.gh_proxy and not GHAPI.validate_gh_proxy(args.gh_proxy):
+        raise ValueError(
+            f"Invalid Github proxy server given by '--gh_proxy' option, "
+            f"it should be a valid URL, not {args.gh_proxy!r}."
+        )
     args.game_version = GameVersionEnum[args.game_version.upper()]
     args.region = RegionEnum(args.region)
     return args
