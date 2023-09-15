@@ -4,6 +4,7 @@ import tempfile
 import json
 import gzip
 
+from ah.errors import DownloadError
 from ah.db import AuctionDB
 from ah.models import (
     MapItemStringMarketValueRecord,
@@ -303,10 +304,8 @@ class TestAuctionDB(TestCase):
             crid=n_crid + 1,
             faction=faction,
         )
-        self.assertRaises(FileNotFoundError, db.fork_file, bad_file)
-        print("--------- expect raise ---------")
+        self.assertRaises(DownloadError, db.fork_file, bad_file)
         self.assertFalse(db.load_db(bad_file))  # return empty map
-        print("--------------------------------")
 
         # assert raises when trying to update
         increment = MapItemStringMarketValueRecord()
@@ -353,7 +352,7 @@ class TestAuctionDB(TestCase):
         )
 
     def test_mode_local_remote(self):
-        mode = AuctionDB.MODE_LOCAL_REMOTE_RW
+        mode = AuctionDB.MODE_REMOTE_R_LOCAL_RW
         db_path = self.tmp_dir.name
         expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
         compress = True

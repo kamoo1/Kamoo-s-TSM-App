@@ -285,11 +285,14 @@ class TestWorkflow(TestCase):
         bn_api = BNAPI(wrapper=DummyAPIWrapper())
         with temp:
             main(
-                db_path,
-                game_version,
-                region,
-                None,
-                bn_api,
+                db_path=db_path,
+                repo=None,
+                gh_proxy=None,
+                game_version=game_version,
+                region=region,
+                cache=None,
+                gh_api=None,
+                bn_api=bn_api,
             )
             # get all files under db_path
             files = set(os.listdir(db_path))
