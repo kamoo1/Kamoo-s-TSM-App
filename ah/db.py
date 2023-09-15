@@ -223,8 +223,9 @@ class AuctionDB:
             try:
                 self.fork_file(file)
             except DownloadError:
-                self._logger.warn(
-                    f"Failed to download {file.file_name!r} from {self.fork_repo!r}"
+                self._logger.warning(
+                    f"Failed to download {file.file_name!r} from {self.fork_repo!r}",
+                    exc_info=True,
                 )
 
     @singledispatchmethod
