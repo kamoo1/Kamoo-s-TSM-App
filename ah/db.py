@@ -17,6 +17,7 @@ from ah.models import (
     FactionEnum,
 )
 from ah.defs import SECONDS_IN
+from ah.errors import DownloadError
 from ah import config
 
 # we only need this for type checking, to avoid circular import
@@ -35,7 +36,7 @@ class AuctionDB:
     # local mode
     MODE_LOCAL_RW = "MODE_LOCAL_RW"
     # fork from repo if not exist, then local mode
-    MODE_LOCAL_REMOTE_RW = "MODE_LOCAL_REMOTE_RW"
+    MODE_REMOTE_R_LOCAL_RW = "MODE_REMOTE_R_LOCAL_RW"
     # read only from remote
     MODE_REMOTE_R = "MODE_REMOTE_R"
 
@@ -54,12 +55,12 @@ class AuctionDB:
             )
         if mode not in (
             self.MODE_LOCAL_RW,
-            self.MODE_LOCAL_REMOTE_RW,
+            self.MODE_REMOTE_R_LOCAL_RW,
             self.MODE_REMOTE_R,
         ):
             raise ValueError(f"Invalid mode: {mode!r}")
 
-        if mode in (self.MODE_LOCAL_REMOTE_RW, self.MODE_REMOTE_R):
+        if mode in (self.MODE_REMOTE_R_LOCAL_RW, self.MODE_REMOTE_R):
             if not (fork_repo and gh_api):
                 # verify fork_repo with REPO_MATCHER
                 raise ValueError(
@@ -121,19 +122,19 @@ class AuctionDB:
         try:
             assets = self.pull_assets_url()
         except Exception as e:
-            raise RuntimeError(
+            raise DownloadError(
                 f"Failed to download asset map from {self.fork_repo!r}"
             ) from e
 
         if file.file_name not in assets:
-            raise FileNotFoundError(f"File not listed in assets: {file.file_name!r}")
+            raise DownloadError(f"File not listed in assets: {file.file_name!r}")
 
         asset_url = assets[file.file_name]
         self._logger.info(f"Downloading asset {file.file_name!r} from {asset_url!r}")
         try:
             asset_data = self.pull_asset(asset_url)
         except Exception as e:
-            raise RuntimeError(
+            raise DownloadError(
                 f"Failed to download asset {file.file_name!r} from {asset_url!r}"
             ) from e
 
@@ -216,13 +217,13 @@ class AuctionDB:
     def ensure_file(self, file: BaseFile) -> None:
         if (
             self.mode == self.MODE_REMOTE_R
-            or self.mode == self.MODE_LOCAL_REMOTE_RW
+            or self.mode == self.MODE_REMOTE_R_LOCAL_RW
             and not file.exists()
         ):
             try:
                 self.fork_file(file)
-            except Exception:
-                self._logger.exception(
+            except DownloadError:
+                self._logger.warn(
                     f"Failed to download {file.file_name!r} from {self.fork_repo!r}"
                 )
 
