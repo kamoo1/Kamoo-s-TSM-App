@@ -392,18 +392,14 @@ def main(
     warcraft_base: str = None,
     export_region: RegionEnum = None,
     export_realms: Set[str] = None,
+    # below are for testability
     cache: Cache = None,
     gh_api: GHAPI = None,
 ):
-    if gh_api is None:
-        if cache is None:
-            cache_path = config.DEFAULT_CACHE_PATH
-            cache = Cache(cache_path)
-
-        gh_api = GHAPI(cache, gh_proxy=gh_proxy)
-
     if repo:
         mode = AuctionDB.MODE_REMOTE_R
+        cache = cache or Cache(config.DEFAULT_CACHE_PATH)
+        gh_api = gh_api or GHAPI(cache, gh_proxy=gh_proxy)
     else:
         mode = AuctionDB.MODE_LOCAL_RW
 
@@ -470,7 +466,8 @@ def parse_args(raw_args):
         default=default_warcraft_base,
         help="Path to Warcraft installation directory, "
         "needed if the script is unable to locate it automatically, "
-        f"default: {default_warcraft_base!r}",
+        "should be something like 'C:\\path_to\\World of Warcraft'. "
+        f"Auto detect: {default_warcraft_base!r}",
     )
     parser.add_argument(
         "export_region",
@@ -485,6 +482,16 @@ def parse_args(raw_args):
     )
     args = parser.parse_args(raw_args)
 
+    if args.repo and not AuctionDB.validate_repo(args.repo):
+        raise ValueError(
+            f"Invalid Github repo given by '--repo' option, "
+            f"it should be a valid Github repo URL, not {args.repo!r}."
+        )
+    if args.repo and args.gh_proxy and not GHAPI.validate_gh_proxy(args.gh_proxy):
+        raise ValueError(
+            f"Invalid Github proxy server given by '--gh_proxy' option, "
+            f"it should be a valid URL, not {args.gh_proxy!r}."
+        )
     if not TSMExporter.validate_warcraft_base(args.warcraft_base):
         raise ValueError(
             "Invalid Warcraft installation directory, "
