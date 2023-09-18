@@ -1,11 +1,14 @@
 # TODO:
-# - tool tab, clear cache
-# - tool tab, install font?
 # - tool tab, patch tsm region db
+# - if no connection under remote mode,
+#   UI will freeze for a while on realm list update
+# - localization
+
 # DONE:
 # - "local remote" mode updating
 # - save settings on close, load on init
 # - make region / game version selection related requests in a thread
+# - tool tab, {clear, browse} {cache, db}
 
 import re
 import os
@@ -19,6 +22,10 @@ from typing import (
 from functools import wraps
 import logging
 import itertools
+import json
+import platform
+import subprocess
+from collections import defaultdict
 
 from PyQt5.QtWidgets import (
     QMainWindow,
@@ -40,8 +47,8 @@ from PyQt5.QtCore import (
     pyqtSignal,
     QThread,
     QObject,
-    QTimer,
     QSettings,
+    QModelIndex,
 )
 
 from ah import config
@@ -58,7 +65,7 @@ from ah.models.blizzard import (
     NameSpaceCategoriesEnum,
 )
 from ah.api import GHAPI, BNAPI
-
+from ah.fs import remove_path
 
 DEFAULT_SETTINGS = (
     ("settings/db_path", "db", "lineEdit_settings_db_path"),
@@ -89,11 +96,12 @@ DEFAULT_SETTINGS = (
     ("updater/client_id", "", "lineEdit_updater_id"),
     ("updater/client_secret", "", "lineEdit_updater_secret"),
 )
+DEFAULT_SETTTING_EXPORTER_REALMS = ("exporter/selected_realms", "{}")
+DEFAULT_SETTTING_UPDATER_COMBOS = ("updater/selected_combos", "[]")
 
 
 class WorkerThread(QThread):
     _sig_final = pyqtSignal(bool, str)
-    _sig_data = None
     logger = logging.getLogger("WorkerThread")
 
     def __init__(
@@ -283,14 +291,82 @@ class RegexValidator(VisualValidator):
 
 
 class RealmsModel(QStandardItemModel):
-    def __init__(self, data: List[Tuple[str, int]], *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        data: List[Tuple[str, int]],
+        *args,
+        parent: QObject | None = None,
+        namespace: Namespace | None = None,
+        settings: QSettings | None = None,
+        **kwargs,
+    ):
+        super().__init__(parent, *args, **kwargs)
+        self._settings = settings
+        self._namespace = namespace
+        self._is_settings_enabled = self._settings and self._namespace
+        key, default = DEFAULT_SETTTING_EXPORTER_REALMS
+        """
+        we store selected realms in settings like this:
+        >>> json = {
+                $namespace: [
+                    [$realm, $crid],
+                    ...
+                ]
+            }
+
+        _selected: Dict[Namespace, Set[Tuple[str, int]]]
+        """
+
+        if self._is_settings_enabled:
+            self._selected = defaultdict(
+                set,
+                {
+                    Namespace.from_str(namespace): {
+                        (realm, crid) for realm, crid in selected_ns
+                    }
+                    for namespace, selected_ns in json.loads(
+                        self._settings.value(key, default)
+                    ).items()
+                },
+            )
+
+        else:
+            self._selected = defaultdict(set)
+
         self._data = data
+
         for realm, crid in data:
             item = QStandardItem(f"{realm}\t{crid}")
             item.setCheckable(True)
             item.setEditable(False)
+            if self.is_last_checked(realm, crid):
+                item.setCheckState(Qt.Checked)
             self.appendRow(item)
+
+    def is_last_checked(self, realm: str, crid: int) -> bool:
+        if not self._is_settings_enabled:
+            return False
+
+        return (realm, crid) in self._selected.get(self._namespace, set())
+
+    def save_settings(self) -> None:
+        key, _ = DEFAULT_SETTTING_EXPORTER_REALMS
+        selected_native = {
+            str(namespace): [[realm, crid] for realm, crid in selected_ns]
+            for namespace, selected_ns in self._selected.items()
+        }
+        self._settings.setValue(
+            key,
+            json.dumps(selected_native),
+        )
+
+    def set_selected(self, index: int, is_selected: bool) -> None:
+        realm, crid = self._data[index]
+        if is_selected:
+            self._selected[self._namespace].add((realm, crid))
+
+        else:
+            self._selected[self._namespace].discard((realm, crid))
 
     def get_selected_realms(self) -> Set[str]:
         realms = set()
@@ -308,15 +384,65 @@ class UpdaterModel(QStandardItemModel):
         self,
         data: List[Tuple[RegionEnum, GameVersionEnum]],
         *args,
+        settings: QSettings | None = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self._data = data
+        self._settings = settings
+        key, default = DEFAULT_SETTTING_UPDATER_COMBOS
+        """
+        we store selected combos (region, game_version) in settings like this:
+        >>> json = [
+                [$region, $game_version],
+                ...
+            ]
+
+        """
+        if self._settings:
+            self._selected = set(
+                (RegionEnum(region), GameVersionEnum(game_version))
+                for region, game_version in json.loads(
+                    self._settings.value(key, default)
+                )
+            )
+
+        else:
+            self._selected = set()
+
         for region, game_version in data:
             item = QStandardItem(f"{region.name}\t{game_version.name}")
             item.setCheckable(True)
             item.setEditable(False)
+            if self.is_last_checked(region, game_version):
+                item.setCheckState(Qt.Checked)
             self.appendRow(item)
+
+    def is_last_checked(
+        self, region: RegionEnum, game_version: GameVersionEnum
+    ) -> bool:
+        if not self._settings:
+            return False
+
+        return (region, game_version) in self._selected
+
+    def save_settings(self) -> None:
+        key, _ = DEFAULT_SETTTING_UPDATER_COMBOS
+        selected_native = [
+            [str(region), str(game_version)] for region, game_version in self._selected
+        ]
+        self._settings.setValue(
+            key,
+            json.dumps(selected_native),
+        )
+
+    def set_selected(self, index: int, is_selected: bool) -> None:
+        region, game_version = self._data[index]
+        if is_selected:
+            self._selected.add((region, game_version))
+
+        else:
+            self._selected.discard((region, game_version))
 
     def get_selected_combos(self) -> Set[Tuple[RegionEnum, GameVersionEnum]]:
         combos = set()
@@ -376,7 +502,8 @@ class Window(QMainWindow, Ui_MainWindow):
         self._lock_on_export_dropdown.extend(lock_on_any)
 
         self._log_handler = None
-        self.settings = QSettings("settings.ini", QSettings.IniFormat)
+        self.path_settings = "settings.ini"
+        self.settings = QSettings(self.path_settings, QSettings.IniFormat)
         self.set_up()
         self.load_settings()
 
@@ -389,6 +516,9 @@ class Window(QMainWindow, Ui_MainWindow):
 
     def load_settings(self) -> None:
         for key, value, widget_name in DEFAULT_SETTINGS:
+            if not widget_name:
+                continue
+
             widget = getattr(self, widget_name)
             if isinstance(widget, QLineEdit):
                 widget.setText(self.settings.value(key, value))
@@ -406,6 +536,9 @@ class Window(QMainWindow, Ui_MainWindow):
     def save_settings(self) -> None:
         # save settings
         for key, value, widget_name in DEFAULT_SETTINGS:
+            if not widget_name:
+                continue
+
             widget = getattr(self, widget_name)
             if isinstance(widget, QLineEdit):
                 value = widget.text()
@@ -418,11 +551,61 @@ class Window(QMainWindow, Ui_MainWindow):
 
             self.settings.setValue(key, value)
 
+        # save exporter realms
+        model = self.listView_exporter_realms.model()
+        if model:
+            model.save_settings()
+
+        # save updater combos
+        model = self.listView_updater_combos.model()
+        if model:
+            model.save_settings()
+
     @classmethod
     def get_existing_directory(cls, that, prompt: str) -> str:
         path = QFileDialog.getExistingDirectory(that, prompt)
         # normalize path
         return os.path.normpath(path)
+
+    def remove_path(self, path: str, is_prompt: bool = True) -> None:
+        # normalize path
+        path = os.path.normpath(path)
+
+        # make sure path exists
+        if not os.path.exists(path):
+            QMessageBox.critical(self, "Remove Path", f"{path!r} does not exist.")
+            return
+
+        if is_prompt:
+            msg = f"Are you sure you want to remove {path!r}?"
+            reply = QMessageBox.question(
+                self, "Remove Path", msg, QMessageBox.Yes, QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                return
+
+        remove_path(path)
+
+    def browse(self, path: str) -> None:
+        """Open up directory."""
+
+        # normalize path
+        path = os.path.normpath(path)
+
+        # make sure path exists
+        if not os.path.exists(path):
+            QMessageBox.critical(self, "Browse Path", f"{path!r} does not exist.")
+            return
+
+        path = os.path.realpath(path)
+        if platform.system() == "Windows":
+            os.startfile(path)
+
+        elif platform.system() == "Darwin":
+            subprocess.Popen(["open", path])
+
+        else:
+            subprocess.Popen(["xdg-open", path])
 
     def set_up(self) -> None:
         """Log Tab"""
@@ -500,6 +683,14 @@ class Window(QMainWindow, Ui_MainWindow):
         self.pushButton_exporter_export.clicked.connect(self.on_exporter_export)
 
         """Updater Tab"""
+        # client id / secret tooltip
+        self.lineEdit_updater_id.setToolTip(
+            f"Battle.net client ID, will be saved in {self.path_settings}."
+        )
+        self.lineEdit_updater_secret.setToolTip(
+            f"Battle.net client secret, will be saved in {self.path_settings}."
+        )
+
         # client id validator
         self.lineEdit_updater_id.setValidator(
             RegexValidator(self.lineEdit_updater_id, r"^[a-f0-9]{32}$")
@@ -522,6 +713,36 @@ class Window(QMainWindow, Ui_MainWindow):
 
         # on update button click, update
         self.pushButton_updater_update.clicked.connect(self.on_updater_update)
+
+        """Tools Tab"""
+        # we can only call functions that belongs to a QObject,
+        # in this case,
+        # <function Window.set_up.<locals>.<lambda> at ...>
+        # other than
+        # <bound method Cache.browse of <ah.cache.Cache object at ...>>
+        # calling latter - self.get_cache().browse will fail silently.
+        #
+        # https://doc.qt.io/qtforpython-6/tutorials/basictutorial/signals_and_slots.html
+
+        # browse cache
+        self.pushButton_tools_cache_browse.clicked.connect(
+            lambda: self.browse(self.get_cache().cache_path)
+        )
+
+        # clear cache
+        self.pushButton_tools_cache_clear.clicked.connect(
+            lambda: self.remove_path(self.get_cache().cache_path)
+        )
+
+        # browse db
+        self.pushButton_tools_db_browse.clicked.connect(
+            lambda: self.browse(self.get_db_path())
+        )
+
+        # clear db
+        self.pushButton_tools_db_clear.clicked.connect(
+            lambda: self.remove_path(self.get_db_path())
+        )
 
     def on_log_recieved(self, msg: str) -> None:
         # StackOverflow
@@ -549,24 +770,36 @@ class Window(QMainWindow, Ui_MainWindow):
         level = self.comboBox_log_log_level.currentText()
         handler.setLevel(level)
 
-    def on_exporter_list_dblclick(self, index) -> None:
+    def on_exporter_list_dblclick(self, index: QModelIndex) -> None:
         model = self.listView_exporter_realms.model()
         item = model.itemFromIndex(index)
         item.setCheckState(
             Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked
         )
+        model.set_selected(index.row(), item.checkState() == Qt.Checked)
 
-    def on_updater_list_dblclick(self, index) -> None:
+    def on_updater_list_dblclick(self, index: QModelIndex) -> None:
         model = self.listView_updater_combos.model()
         item = model.itemFromIndex(index)
         item.setCheckState(
             Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked
         )
+        model.set_selected(index.row(), item.checkState() == Qt.Checked)
 
     def on_exporter_dropdown_change(self) -> None:
         # lock widgets
         for widget in self._lock_on_export_dropdown:
             widget.setEnabled(False)
+
+        # save current selection
+        model = self.listView_exporter_realms.model()
+        if model:
+            model.save_settings()
+
+        # clear model
+        model = self.listView_exporter_realms.model()
+        if model:
+            model.deleteLater()
 
         try:
             data_path = self.get_db_path()
@@ -601,7 +834,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 for realm in realms:
                     tups_realm_crid.append((realm, crid))
 
-            self.populate_exporter_realms(tups_realm_crid)
+            self.populate_exporter_realms(tups_realm_crid, namespace=namespace)
 
         def on_final(success: bool, msg: str) -> None:
             # unlock widgets
@@ -720,8 +953,14 @@ class Window(QMainWindow, Ui_MainWindow):
 
         task()
 
-    def populate_exporter_realms(self, tups_realm_crid: List[Tuple[str, int]]) -> None:
-        model = RealmsModel(tups_realm_crid)
+    def populate_exporter_realms(
+        self, tups_realm_crid: List[Tuple[str, int]], namespace: Namespace = None
+    ) -> None:
+        model = RealmsModel(
+            tups_realm_crid,
+            namespace=namespace,
+            settings=self.settings,
+        )
         self.listView_exporter_realms.setModel(model)
 
     def populate_updater_combos(self) -> None:
@@ -731,7 +970,7 @@ class Window(QMainWindow, Ui_MainWindow):
             combos.append((region, game_version))
 
         # populate combos
-        model = UpdaterModel(combos)
+        model = UpdaterModel(combos, settings=self.settings)
         self.listView_updater_combos.setModel(model)
 
     def popup_error(self, type: str, message: str) -> None:
