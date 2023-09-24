@@ -8,8 +8,6 @@ from PyQt5.QtCore import qFatal
 from ah import config
 from ah.ui.main_controller import Window
 
-sys._excepthook = sys.excepthook
-
 
 def application_exception_hook(exctype, value, tb):
     # StackOverflow
@@ -27,9 +25,9 @@ def application_exception_hook(exctype, value, tb):
     qFatal("Exiting due to uncaught exception")
 
 
-sys.excepthook = application_exception_hook
-
-if __name__ == "__main__":
+def main():
+    sys._excepthook = sys.excepthook
+    sys.excepthook = application_exception_hook
     # create logger with lowest level, with stream handler.
     # we do this because there will be another handler that
     # displays logs on the GUI with adjustable level.
@@ -41,3 +39,7 @@ if __name__ == "__main__":
     win = Window()
     win.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

@@ -1,14 +1,6 @@
 # TODO:
-# - tool tab, patch tsm region db
-# - if no connection under remote mode,
-#   UI will freeze for a while on realm list update
 # - localization
-
-# DONE:
-# - "local remote" mode updating
-# - save settings on close, load on init
-# - make region / game version selection related requests in a thread
-# - tool tab, {clear, browse} {cache, db}
+# - test crash log
 
 import re
 import os
@@ -49,6 +41,7 @@ from PyQt5.QtCore import (
     QObject,
     QSettings,
     QModelIndex,
+    QCoreApplication,
 )
 
 from ah import config
@@ -66,6 +59,7 @@ from ah.models.blizzard import (
 )
 from ah.api import GHAPI, BNAPI
 from ah.fs import remove_path
+from ah.patcher import patch_tsm
 
 DEFAULT_SETTINGS = (
     ("settings/db_path", "db", "lineEdit_settings_db_path"),
@@ -98,6 +92,11 @@ DEFAULT_SETTINGS = (
 )
 DEFAULT_SETTTING_EXPORTER_REALMS = ("exporter/selected_realms", "{}")
 DEFAULT_SETTTING_UPDATER_COMBOS = ("updater/selected_combos", "[]")
+
+PATH_PATCH_DIFF = "data/LibRealmInfo.lua.diff"
+PATH_PATCH_DIGEST = "data/LibRealmInfo.lua.sha256"
+
+_t = QCoreApplication.translate
 
 
 class WorkerThread(QThread):
@@ -235,7 +234,7 @@ class WarCraftBaseValidator(VisualValidator):
 
     def raise_invalid(self) -> None:
         if self.get_state() != QValidator.Acceptable:
-            raise ConfigError("Invalid Warcraft Base Path")
+            raise ConfigError(_t("MainWindow", "Invalid Warcraft Base Path"))
 
 
 class RepoValidator(VisualValidator):
@@ -251,7 +250,7 @@ class RepoValidator(VisualValidator):
 
     def raise_invalid(self):
         if self.get_state() != QValidator.Acceptable:
-            raise ConfigError("Invalid Github Repo")
+            raise ConfigError(_t("MainWindow", "Invalid Github Repo"))
 
 
 class GHProxyValidator(VisualValidator):
@@ -267,7 +266,7 @@ class GHProxyValidator(VisualValidator):
 
     def raise_invalid(self):
         if self.get_state() != QValidator.Acceptable:
-            raise ConfigError("Invalid Github Proxy")
+            raise ConfigError(_t("MainWindow", "Invalid Github Proxy"))
 
 
 class RegexValidator(VisualValidator):
@@ -287,7 +286,7 @@ class RegexValidator(VisualValidator):
 
     def raise_invalid(self):
         if self.get_state() != QValidator.Acceptable:
-            raise ConfigError("Invalid Input")
+            raise ConfigError(_t("MainWindow", "Invalid Input"))
 
 
 class RealmsModel(QStandardItemModel):
@@ -507,9 +506,6 @@ class Window(QMainWindow, Ui_MainWindow):
         self.set_up()
         self.load_settings()
 
-        # timer = QTimer(self)
-        # timer.singleShot(100, self.post_init)
-
     def closeEvent(self, event) -> None:
         self.save_settings()
         event.accept()
@@ -520,18 +516,34 @@ class Window(QMainWindow, Ui_MainWindow):
                 continue
 
             widget = getattr(self, widget_name)
-            if isinstance(widget, QLineEdit):
-                widget.setText(self.settings.value(key, value))
-            elif isinstance(widget, QCheckBox):
-                # NOTE: INI file doesn't perserve bool type, it becomes str when loaded.
-                val = self.settings.value(key, value)
-                if isinstance(val, str):
-                    val = val.lower() == "true"
-                widget.setChecked(val)
-            elif isinstance(widget, QComboBox):
-                widget.setCurrentText(self.settings.value(key, value))
-            else:
-                raise RuntimeError(f"Unknown widget type for load settings: {widget!r}")
+            try:
+                if isinstance(widget, QLineEdit):
+                    widget.setText(self.settings.value(key, value))
+
+                elif isinstance(widget, QCheckBox):
+                    # NOTE: INI file doesn't perserve bool type,
+                    # it becomes str when loaded.
+                    val = self.settings.value(key, value)
+                    if isinstance(val, str):
+                        val = val.lower() == "true"
+
+                    widget.setChecked(val)
+
+                elif isinstance(widget, QComboBox):
+                    widget.setCurrentText(self.settings.value(key, value))
+
+                else:
+                    raise RuntimeError(
+                        _t(
+                            "MainWindow",
+                            f"Unknown widget type for load settings: {widget!r}",
+                        )
+                    )
+
+            except Exception as e:
+                self.popup_error(
+                    _t("MainWindow", f"Failed to load settings for {key}"), str(e)
+                )
 
     def save_settings(self) -> None:
         # save settings
@@ -547,7 +559,12 @@ class Window(QMainWindow, Ui_MainWindow):
             elif isinstance(widget, QComboBox):
                 value = widget.currentText()
             else:
-                raise RuntimeError(f"Unknown widget type for save settings: {widget!r}")
+                raise RuntimeError(
+                    _t(
+                        "MainWindow",
+                        f"Unknown widget type for save settings: {widget!r}",
+                    )
+                )
 
             self.settings.setValue(key, value)
 
@@ -573,13 +590,21 @@ class Window(QMainWindow, Ui_MainWindow):
 
         # make sure path exists
         if not os.path.exists(path):
-            QMessageBox.critical(self, "Remove Path", f"{path!r} does not exist.")
+            QMessageBox.critical(
+                self,
+                _t("MainWindow", "Remove Path"),
+                _t("MainWindow", f"{path!r} does not exist."),
+            )
             return
 
         if is_prompt:
-            msg = f"Are you sure you want to remove {path!r}?"
+            msg = _t("MainWindow", f"Are you sure you want to remove {path!r}?")
             reply = QMessageBox.question(
-                self, "Remove Path", msg, QMessageBox.Yes, QMessageBox.No
+                self,
+                _t("MainWindow", "Remove Path"),
+                msg,
+                QMessageBox.Yes,
+                QMessageBox.No,
             )
             if reply == QMessageBox.No:
                 return
@@ -594,7 +619,11 @@ class Window(QMainWindow, Ui_MainWindow):
 
         # make sure path exists
         if not os.path.exists(path):
-            QMessageBox.critical(self, "Browse Path", f"{path!r} does not exist.")
+            QMessageBox.critical(
+                self,
+                _t("MainWindow", "Browse Path"),
+                _t("MainWindow", f"{path!r} does not exist."),
+            )
             return
 
         path = os.path.realpath(path)
@@ -631,7 +660,7 @@ class Window(QMainWindow, Ui_MainWindow):
         # db path select
         self.toolButton_settings_db_path.clicked.connect(
             lambda: self.lineEdit_settings_db_path.setText(
-                self.get_existing_directory(self, "Select DB Path")
+                self.get_existing_directory(self, _t("MainWindow", "Select DB Path"))
             )
         )
 
@@ -643,7 +672,9 @@ class Window(QMainWindow, Ui_MainWindow):
         # game path select
         self.toolButton_settings_game_path.clicked.connect(
             lambda: self.lineEdit_settings_game_path.setText(
-                self.get_existing_directory(self, "Select Warcraft Base Path")
+                self.get_existing_directory(
+                    self, _t("MainWindow", "Select Warcraft Base Path")
+                )
             )
         )
 
@@ -685,10 +716,16 @@ class Window(QMainWindow, Ui_MainWindow):
         """Updater Tab"""
         # client id / secret tooltip
         self.lineEdit_updater_id.setToolTip(
-            f"Battle.net client ID, will be saved in {self.path_settings}."
+            _t(
+                "MainWindow",
+                f"Battle.net client ID, will be saved in {self.path_settings}.",
+            )
         )
         self.lineEdit_updater_secret.setToolTip(
-            f"Battle.net client secret, will be saved in {self.path_settings}."
+            _t(
+                "MainWindow",
+                f"Battle.net client secret, will be saved in {self.path_settings}.",
+            )
         )
 
         # client id validator
@@ -743,6 +780,9 @@ class Window(QMainWindow, Ui_MainWindow):
         self.pushButton_tools_db_clear.clicked.connect(
             lambda: self.remove_path(self.get_db_path())
         )
+
+        # patch tsm
+        self.pushButton_tools_patch_tsm.clicked.connect(self.on_patch_tsm)
 
     def on_log_recieved(self, msg: str) -> None:
         # StackOverflow
@@ -825,7 +865,7 @@ class Window(QMainWindow, Ui_MainWindow):
             )
 
         except ConfigError as e:
-            self.popup_error("Config Error", str(e))
+            self.popup_error(_t("MainWindow", "Config Error"), str(e))
             return
 
         def on_data(connected_realms: Dict[str, List[str]]):
@@ -842,7 +882,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 widget.setEnabled(True)
 
             if not success:
-                self.popup_error("Export Error", msg)
+                self.popup_error(_t("MainWindow", "Export Error"), msg)
 
         @threaded(
             self,
@@ -864,11 +904,7 @@ class Window(QMainWindow, Ui_MainWindow):
             widget.setEnabled(False)
 
         try:
-            self.lineEdit_settings_game_path.validator().raise_invalid()
-            warcraft_base = self.lineEdit_settings_game_path.text()
-            warcraft_base = os.path.normpath(warcraft_base)
-            warcraft_base = os.path.abspath(warcraft_base)
-
+            warcraft_base = self.get_warcraft_base()
             game_version = GameVersionEnum[
                 self.comboBox_exporter_game_version.currentText()
             ]
@@ -881,7 +917,7 @@ class Window(QMainWindow, Ui_MainWindow):
             cache = self.get_cache()
 
         except ConfigError as e:
-            self.popup_error("Config Error", str(e))
+            self.popup_error(_t("MainWindow", "Config Error"), str(e))
             return
 
         def on_final(success: bool, msg: str) -> None:
@@ -890,7 +926,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 widget.setEnabled(True)
 
             if not success:
-                self.popup_error("Export Error", msg)
+                self.popup_error(_t("MainWindow", "Export Error"), msg)
 
         @threaded(self, _on_final=on_final)
         def task(*args, **kwargs):
@@ -927,7 +963,7 @@ class Window(QMainWindow, Ui_MainWindow):
             combos = self.listView_updater_combos.model().get_selected_combos()
 
         except ConfigError as e:
-            self.popup_error("Config Error", str(e))
+            self.popup_error(_t("MainWindow", "Config Error"), str(e))
             return
 
         def on_task_done(success: bool, msg: str) -> None:
@@ -936,7 +972,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 widget.setEnabled(True)
 
             if not success:
-                self.popup_error("Update Error", msg)
+                self.popup_error(_t("MainWindow", "Update Error"), msg)
 
         @threaded(self, on_final=on_task_done)
         def task(*args, **kwargs):
@@ -952,6 +988,17 @@ class Window(QMainWindow, Ui_MainWindow):
                 )
 
         task()
+
+    def on_patch_tsm(self) -> None:
+        with open(PATH_PATCH_DIGEST, "r") as f:
+            patch_digest = f.read().strip()
+
+        with open(PATH_PATCH_DIFF, "r") as f:
+            patch_tsm(
+                warcraft_base=self.get_warcraft_base(),
+                src_digest=patch_digest,
+                diff=f,
+            )
 
     def populate_exporter_realms(
         self, tups_realm_crid: List[Tuple[str, int]], namespace: Namespace = None
@@ -1009,8 +1056,11 @@ class Window(QMainWindow, Ui_MainWindow):
 
         else:
             raise RuntimeError(
-                f"Invalid selected tab {self.tabWidget.currentWidget()!r}"
-                f" for function 'get_namespace'"
+                _t(
+                    "MainWindow",
+                    f"Invalid selected tab {self.tabWidget.currentWidget()!r}"
+                    f" for function 'get_namespace'",
+                )
             )
 
     def get_db_path(self) -> str:
@@ -1023,3 +1073,10 @@ class Window(QMainWindow, Ui_MainWindow):
         self.lineEdit_settings_repo.validator().raise_invalid()
         repo = self.lineEdit_settings_repo.text()
         return repo
+
+    def get_warcraft_base(self) -> str:
+        self.lineEdit_settings_game_path.validator().raise_invalid()
+        warcraft_base = self.lineEdit_settings_game_path.text()
+        warcraft_base = os.path.normpath(warcraft_base)
+        warcraft_base = os.path.abspath(warcraft_base)
+        return warcraft_base
