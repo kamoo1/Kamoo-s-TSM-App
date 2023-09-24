@@ -341,19 +341,7 @@ class TSMExporter:
 
         if region_auctions_commodities_data:
             for region_export in self.REGION_AUCTIONS_COMMODITIES_EXPORTS:
-                if (
-                    namespace.game_version
-                    in (
-                        GameVersionEnum.CLASSIC,
-                        GameVersionEnum.CLASSIC_WLK,
-                    )
-                    and namespace.region == RegionEnum.TW
-                ):
-                    # TSM reconizes TW as KR in classic
-                    region = "KR"
-                else:
-                    region = namespace.region.upper()
-
+                region = namespace.region.upper()
                 tsm_game_version = namespace.game_version.get_tsm_game_version()
                 if tsm_game_version:
                     tsm_region = f"{tsm_game_version}-{region}"
