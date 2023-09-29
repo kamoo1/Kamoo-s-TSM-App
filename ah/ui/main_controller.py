@@ -1,7 +1,3 @@
-# TODO:
-# - localization
-# - test crash log
-
 import re
 import os
 from typing import (
@@ -42,6 +38,8 @@ from PyQt5.QtCore import (
     QSettings,
     QModelIndex,
     QCoreApplication,
+    QTranslator,
+    QLocale,
 )
 
 from ah import config
@@ -61,6 +59,42 @@ from ah.api import GHAPI, BNAPI
 from ah.fs import remove_path
 from ah.patcher import patch_tsm
 
+
+class LocaleHelper:
+    PATH_LOCALES = "./locales"
+    FALLBACK_CODE = "en_US"
+
+    def __init__(self) -> None:
+        self.map_name_code = {}
+        self.map_code_name = {}
+
+        for file in os.listdir(self.PATH_LOCALES):
+            if not file.endswith(".qm"):
+                continue
+
+            try:
+                file = os.path.basename(file)
+                code = file.split(".")[0]
+                ql = QLocale(code)
+                code_ = ql.name()
+                name_ = ql.nativeLanguageName()
+                if code_ == code:
+                    self.map_name_code[name_] = code
+                    self.map_code_name[code] = name_
+
+            except Exception:
+                pass
+
+    def get_default_name(self) -> str | None:
+        system_code = QLocale.system().name()
+        if system_code in self.map_code_name:
+            return self.map_code_name[system_code]
+        else:
+            return self.map_code_name.get(self.FALLBACK_CODE)
+
+
+LH = LocaleHelper()
+
 DEFAULT_SETTINGS = (
     ("settings/db_path", "db", "lineEdit_settings_db_path"),
     (
@@ -79,6 +113,11 @@ DEFAULT_SETTINGS = (
         "lineEdit_settings_gh_proxy",
     ),
     ("settings/gh_proxy_enabled", True, "checkBox_settings_gh_proxy"),
+    (
+        "settings/locale",
+        LH.get_default_name(),
+        "comboBox_settings_locale",
+    ),
     ("exporter/region", RegionEnum.TW.name, "comboBox_exporter_region"),
     (
         "exporter/game_version",
@@ -90,11 +129,13 @@ DEFAULT_SETTINGS = (
     ("updater/client_id", "", "lineEdit_updater_id"),
     ("updater/client_secret", "", "lineEdit_updater_secret"),
 )
+DEFAULT_SETTINGS_EXPORTER_PATCH_NOTIFIED = ("exporter/patch_notified", False)
 DEFAULT_SETTTING_EXPORTER_REALMS = ("exporter/selected_realms", "{}")
 DEFAULT_SETTTING_UPDATER_COMBOS = ("updater/selected_combos", "[]")
 
 PATH_PATCH_DIFF = "data/LibRealmInfo.lua.diff"
 PATH_PATCH_DIGEST = "data/LibRealmInfo.lua.sha256"
+
 
 _t = QCoreApplication.translate
 
@@ -131,7 +172,7 @@ class WorkerThread(QThread):
         try:
             ret = self._func(*self._args, **self._kwargs)
         except Exception as e:
-            self.logger.exception(e)
+            self.logger.warning(f"Worker thread failed: {e}", exc_info=True)
             if self._sig_final:
                 self._sig_final.emit(False, str(e))
 
@@ -459,6 +500,14 @@ class Window(QMainWindow, Ui_MainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._path_settings = "settings.ini"
+        self._settings = QSettings(self._path_settings, QSettings.IniFormat)
+        self._translator = QTranslator(self)
+        self._log_handler = LogEmitterHandler(self._log_signal)
+        self._log_handler.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+        logging.getLogger().addHandler(self._log_handler)
+        self._logger = logging.getLogger("MainWindow")
+
         self.setupUi(self)
         # widgets that need to be disabled when updating or exporting
         lock_on_any = [
@@ -500,11 +549,13 @@ class Window(QMainWindow, Ui_MainWindow):
         ]
         self._lock_on_export_dropdown.extend(lock_on_any)
 
-        self._log_handler = None
-        self.path_settings = "settings.ini"
-        self.settings = QSettings(self.path_settings, QSettings.IniFormat)
-        self.set_up()
         self.load_settings()
+
+        # hacky way avoiding `load_settings` triggering `on_exporter_dropdown_change`
+        # because when it triggers twice, due to the async nature of worker thread,
+        # the result from the first trigger may override the second.
+        self.post_setting_load_setup()
+        self.on_exporter_dropdown_change()
 
     def closeEvent(self, event) -> None:
         self.save_settings()
@@ -515,35 +566,40 @@ class Window(QMainWindow, Ui_MainWindow):
             if not widget_name:
                 continue
 
-            widget = getattr(self, widget_name)
             try:
+                widget = getattr(self, widget_name)
+                val = self._settings.value(key, value)
+                if val is None:
+                    continue
+
                 if isinstance(widget, QLineEdit):
-                    widget.setText(self.settings.value(key, value))
+                    widget.setText(val)
 
                 elif isinstance(widget, QCheckBox):
                     # NOTE: INI file doesn't perserve bool type,
                     # it becomes str when loaded.
-                    val = self.settings.value(key, value)
                     if isinstance(val, str):
                         val = val.lower() == "true"
 
                     widget.setChecked(val)
 
                 elif isinstance(widget, QComboBox):
-                    widget.setCurrentText(self.settings.value(key, value))
+                    widget.setCurrentText(val)
 
                 else:
-                    raise RuntimeError(
-                        _t(
-                            "MainWindow",
-                            f"Unknown widget type for load settings: {widget!r}",
-                        )
+                    msg = _t(
+                        "MainWindow", "Unknown widget type for load settings: {!r}"
                     )
+                    msg = msg.format(widget)
+                    raise RuntimeError(msg)
 
             except Exception as e:
-                self.popup_error(
-                    _t("MainWindow", f"Failed to load settings for {key}"), str(e)
+                self._logger.warning(
+                    f"Failed to load settings for {key!r}", exc_info=True
                 )
+                msg = _t("MainWindow", "Failed to load settings for {!r}")
+                msg = msg.format(key)
+                self.popup_error(msg, str(e))
 
     def save_settings(self) -> None:
         # save settings
@@ -559,14 +615,11 @@ class Window(QMainWindow, Ui_MainWindow):
             elif isinstance(widget, QComboBox):
                 value = widget.currentText()
             else:
-                raise RuntimeError(
-                    _t(
-                        "MainWindow",
-                        f"Unknown widget type for save settings: {widget!r}",
-                    )
-                )
+                msg = _t("MainWindow", "Unknown widget type for save settings: {!r}")
+                msg = msg.format(widget)
+                raise RuntimeError(msg)
 
-            self.settings.setValue(key, value)
+            self._settings.setValue(key, value)
 
         # save exporter realms
         model = self.listView_exporter_realms.model()
@@ -579,10 +632,12 @@ class Window(QMainWindow, Ui_MainWindow):
             model.save_settings()
 
     @classmethod
-    def get_existing_directory(cls, that, prompt: str) -> str:
-        path = QFileDialog.getExistingDirectory(that, prompt)
-        # normalize path
-        return os.path.normpath(path)
+    def select_directory(cls, line_edit: QLineEdit, prompt: str):
+        path = QFileDialog.getExistingDirectory(line_edit, prompt)
+        if path:
+            # normalize path
+            path = os.path.normpath(path)
+            line_edit.setText(path)
 
     def remove_path(self, path: str, is_prompt: bool = True) -> None:
         # normalize path
@@ -590,15 +645,18 @@ class Window(QMainWindow, Ui_MainWindow):
 
         # make sure path exists
         if not os.path.exists(path):
+            msg = _t("MainWindow", "{!r} does not exist.")
+            msg = msg.format(path)
             QMessageBox.critical(
                 self,
                 _t("MainWindow", "Remove Path"),
-                _t("MainWindow", f"{path!r} does not exist."),
+                msg,
             )
             return
 
         if is_prompt:
-            msg = _t("MainWindow", f"Are you sure you want to remove {path!r}?")
+            msg = _t("MainWindow", "Are you sure you want to remove {!r}?")
+            msg = msg.format(path)
             reply = QMessageBox.question(
                 self,
                 _t("MainWindow", "Remove Path"),
@@ -619,10 +677,12 @@ class Window(QMainWindow, Ui_MainWindow):
 
         # make sure path exists
         if not os.path.exists(path):
+            msg = _t("MainWindow", "{!r} does not exist.")
+            msg = msg.format(path)
             QMessageBox.critical(
                 self,
                 _t("MainWindow", "Browse Path"),
-                _t("MainWindow", f"{path!r} does not exist."),
+                msg,
             )
             return
 
@@ -636,7 +696,30 @@ class Window(QMainWindow, Ui_MainWindow):
         else:
             subprocess.Popen(["xdg-open", path])
 
-    def set_up(self) -> None:
+    def load_locale_by_name(self, l_name: str):
+        if l_name not in LH.map_name_code:
+            msg = _t("MainWindow", "Locale {!r} not found!")
+            msg = msg.format(l_name)
+            raise ConfigError(msg)
+
+        QCoreApplication.removeTranslator(self._translator)
+        self._translator.load(f"locales/{LH.map_name_code[l_name]}.qm")
+        QCoreApplication.installTranslator(self._translator)
+        self.retranslateUi(self)
+
+    def retranslateUi(self, MainWindow):
+        super().retranslateUi(MainWindow)
+        # client id / secret tooltip
+        text = _t("MainWindow", "Battle.net client ID, will be saved under {!r}.")
+        text = text.format(self._path_settings)
+        self.lineEdit_updater_id.setToolTip(text)
+        text = _t("MainWindow", "Battle.net client secret, will be saved under {!r}.")
+        text = text.format(self._path_settings)
+        self.lineEdit_updater_secret.setToolTip(text)
+
+    def setupUi(self, MainWindow: QObject) -> None:
+        super().setupUi(MainWindow)
+
         """Log Tab"""
         # populate logging level combo box
         self.comboBox_log_log_level.addItems(level for level in LoggingLevel)
@@ -646,11 +729,7 @@ class Window(QMainWindow, Ui_MainWindow):
             self.on_logging_level_change
         )
 
-        # set up logging handler
-        log_handler = LogEmitterHandler(self._log_signal)
-        log_handler.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
-        logging.getLogger().addHandler(log_handler)
-        self._log_handler = log_handler
+        # set up logging event
         self._log_signal.connect(self.on_log_recieved)
 
         # set default logging level
@@ -659,8 +738,9 @@ class Window(QMainWindow, Ui_MainWindow):
         """Settings Tab"""
         # db path select
         self.toolButton_settings_db_path.clicked.connect(
-            lambda: self.lineEdit_settings_db_path.setText(
-                self.get_existing_directory(self, _t("MainWindow", "Select DB Path"))
+            lambda: self.select_directory(
+                self.lineEdit_settings_db_path,
+                _t("MainWindow", "Select DB Path"),
             )
         )
 
@@ -671,10 +751,9 @@ class Window(QMainWindow, Ui_MainWindow):
         self.lineEdit_settings_game_path.hasAcceptableInput()
         # game path select
         self.toolButton_settings_game_path.clicked.connect(
-            lambda: self.lineEdit_settings_game_path.setText(
-                self.get_existing_directory(
-                    self, _t("MainWindow", "Select Warcraft Base Path")
-                )
+            lambda: self.select_directory(
+                self.lineEdit_settings_game_path,
+                _t("MainWindow", "Select Warcraft Base Path"),
             )
         )
 
@@ -690,19 +769,16 @@ class Window(QMainWindow, Ui_MainWindow):
         )
         self.lineEdit_settings_gh_proxy.hasAcceptableInput()
 
+        # locales dropdown
+        self.comboBox_settings_locale.addItems(LH.map_name_code)
+        self.comboBox_settings_locale.currentTextChanged.connect(self.on_locale_change)
+
         """Exporter Tab"""
         # regions
         self.comboBox_exporter_region.addItems(region.name for region in RegionEnum)
         # game versions
         self.comboBox_exporter_game_version.addItems(
             version.name for version in GameVersionEnum
-        )
-        # on region / game version change, update realm list
-        self.comboBox_exporter_region.currentTextChanged.connect(
-            self.on_exporter_dropdown_change
-        )
-        self.comboBox_exporter_game_version.currentTextChanged.connect(
-            self.on_exporter_dropdown_change
         )
 
         # on list item double click, toggle check
@@ -714,20 +790,6 @@ class Window(QMainWindow, Ui_MainWindow):
         self.pushButton_exporter_export.clicked.connect(self.on_exporter_export)
 
         """Updater Tab"""
-        # client id / secret tooltip
-        self.lineEdit_updater_id.setToolTip(
-            _t(
-                "MainWindow",
-                f"Battle.net client ID, will be saved in {self.path_settings}.",
-            )
-        )
-        self.lineEdit_updater_secret.setToolTip(
-            _t(
-                "MainWindow",
-                f"Battle.net client secret, will be saved in {self.path_settings}.",
-            )
-        )
-
         # client id validator
         self.lineEdit_updater_id.setValidator(
             RegexValidator(self.lineEdit_updater_id, r"^[a-f0-9]{32}$")
@@ -783,6 +845,15 @@ class Window(QMainWindow, Ui_MainWindow):
 
         # patch tsm
         self.pushButton_tools_patch_tsm.clicked.connect(self.on_patch_tsm)
+
+    def post_setting_load_setup(self) -> None:
+        # on region / game version change, update realm list
+        self.comboBox_exporter_region.currentTextChanged.connect(
+            self.on_exporter_dropdown_change
+        )
+        self.comboBox_exporter_game_version.currentTextChanged.connect(
+            self.on_exporter_dropdown_change
+        )
 
     def on_log_recieved(self, msg: str) -> None:
         # StackOverflow
@@ -866,6 +937,9 @@ class Window(QMainWindow, Ui_MainWindow):
 
         except ConfigError as e:
             self.popup_error(_t("MainWindow", "Config Error"), str(e))
+            # unlock widgets
+            for widget in self._lock_on_export_dropdown:
+                widget.setEnabled(True)
             return
 
         def on_data(connected_realms: Dict[str, List[str]]):
@@ -899,6 +973,44 @@ class Window(QMainWindow, Ui_MainWindow):
         task()
 
     def on_exporter_export(self) -> None:
+        # notify user to patch TSM
+        (
+            patch_notified_key,
+            patch_notified_default,
+        ) = DEFAULT_SETTINGS_EXPORTER_PATCH_NOTIFIED
+        patch_notified = self._settings.value(
+            patch_notified_key, patch_notified_default
+        )
+        if isinstance(patch_notified, str):
+            patch_notified = patch_notified.lower() == "true"
+
+        if not patch_notified:
+            # pop up message box (patch now or later)
+            msg = _t(
+                "MainWindow",
+                "If you're exporting regions and realms not officially supported "
+                "by TSM (like TW, KR, and some classic realms), it is "
+                "recommended to patch TSM's 'LibRealmInfo' library with the data "
+                "of some newly added realms they're missing. \n\n"
+                "Missing these data can cause TSM misidentify "
+                "the region of these realms, which can lead to problem loading "
+                "auction data.\n\n"
+                "You can patch now by clicking 'Yes' or pass by clicking 'No' "
+                "(you can always patch later by clicking 'Patch LibRealmInfo' "
+                "button in the 'Tools' tab)."  # fmt: skip
+            )
+            reply = QMessageBox.question(
+                self,
+                _t("MainWindow", "Patch TSM"),
+                msg,
+                QMessageBox.Yes,
+                QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                self.on_patch_tsm()
+
+            self._settings.setValue(patch_notified_key, True)
+
         # lock widgets
         for widget in self._lock_on_export:
             widget.setEnabled(False)
@@ -918,6 +1030,10 @@ class Window(QMainWindow, Ui_MainWindow):
 
         except ConfigError as e:
             self.popup_error(_t("MainWindow", "Config Error"), str(e))
+            # unlock widgets
+            for widget in self._lock_on_export:
+                widget.setEnabled(True)
+
             return
 
         def on_final(success: bool, msg: str) -> None:
@@ -964,6 +1080,9 @@ class Window(QMainWindow, Ui_MainWindow):
 
         except ConfigError as e:
             self.popup_error(_t("MainWindow", "Config Error"), str(e))
+            # unlock widgets
+            for widget in self._lock_on_update:
+                widget.setEnabled(True)
             return
 
         def on_task_done(success: bool, msg: str) -> None:
@@ -993,12 +1112,33 @@ class Window(QMainWindow, Ui_MainWindow):
         with open(PATH_PATCH_DIGEST, "r") as f:
             patch_digest = f.read().strip()
 
+        try:
+            warcraft_base = self.get_warcraft_base()
+        except ConfigError as e:
+            self.popup_error(_t("MainWindow", "Config Error"), str(e))
+            return
+
         with open(PATH_PATCH_DIFF, "r") as f:
             patch_tsm(
-                warcraft_base=self.get_warcraft_base(),
+                warcraft_base=warcraft_base,
                 src_digest=patch_digest,
                 diff=f,
             )
+
+        # pop up feedback
+        QMessageBox.information(
+            self,
+            _t("MainWindow", "Patch TSM"),
+            _t("MainWindow", "Patched TSM successfully!"),
+        )
+
+    def on_locale_change(self) -> None:
+        locale = self.comboBox_settings_locale.currentText()
+        try:
+            self.load_locale_by_name(locale)
+        except ConfigError as e:
+            self.popup_error(_t("MainWindow", "Config Error"), str(e))
+            return
 
     def populate_exporter_realms(
         self, tups_realm_crid: List[Tuple[str, int]], namespace: Namespace = None
@@ -1006,7 +1146,7 @@ class Window(QMainWindow, Ui_MainWindow):
         model = RealmsModel(
             tups_realm_crid,
             namespace=namespace,
-            settings=self.settings,
+            settings=self._settings,
         )
         self.listView_exporter_realms.setModel(model)
 
@@ -1017,7 +1157,7 @@ class Window(QMainWindow, Ui_MainWindow):
             combos.append((region, game_version))
 
         # populate combos
-        model = UpdaterModel(combos, settings=self.settings)
+        model = UpdaterModel(combos, settings=self._settings)
         self.listView_updater_combos.setModel(model)
 
     def popup_error(self, type: str, message: str) -> None:
@@ -1055,13 +1195,11 @@ class Window(QMainWindow, Ui_MainWindow):
             )
 
         else:
-            raise RuntimeError(
-                _t(
-                    "MainWindow",
-                    f"Invalid selected tab {self.tabWidget.currentWidget()!r}"
-                    f" for function 'get_namespace'",
-                )
+            msg = _t(
+                "MainWindow", "Invalid selected tab {!r} for function 'get_namespace'"
             )
+            msg = msg.format(self.tabWidget.currentWidget())
+            raise RuntimeError(msg)
 
     def get_db_path(self) -> str:
         data_path = self.lineEdit_settings_db_path.text()

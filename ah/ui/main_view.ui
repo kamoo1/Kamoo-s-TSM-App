@@ -285,17 +285,68 @@
         <string>Settings</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout">
-        <item row="3" column="1">
-         <widget class="QLineEdit" name="lineEdit_settings_game_path">
-          <property name="toolTip">
-           <string>Base path of WoW, e.g. 'C:\Program Files (x86)\World of Warcraft'</string>
-          </property>
-         </widget>
-        </item>
         <item row="7" column="1">
          <widget class="QLineEdit" name="lineEdit_settings_gh_proxy">
           <property name="toolTip">
            <string>Proxy of Github, for those who unable to access behind a firewall.</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="1">
+         <widget class="QLabel" name="label_settings_gh_proxy">
+          <property name="text">
+           <string>Github Proxy</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QLabel" name="label_settings_repo">
+          <property name="text">
+           <string>Remote Source</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QToolButton" name="toolButton_settings_db_path">
+          <property name="text">
+           <string>...</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="2">
+         <widget class="QToolButton" name="toolButton_settings_game_path">
+          <property name="text">
+           <string>...</string>
+          </property>
+          <property name="toolButtonStyle">
+           <enum>Qt::ToolButtonIconOnly</enum>
+          </property>
+          <property name="arrowType">
+           <enum>Qt::NoArrow</enum>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="label_settings_db_path">
+          <property name="text">
+           <string>Local DB Path</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLabel" name="label_settings_game_path">
+          <property name="text">
+           <string>World of Warcraft Install Path</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="1">
+         <widget class="QLineEdit" name="lineEdit_settings_repo">
+          <property name="toolTip">
+           <string>Used as source in remote mode, also for software update. Only accepting Github.</string>
           </property>
           <property name="text">
            <string/>
@@ -312,7 +363,7 @@
           </property>
          </widget>
         </item>
-        <item row="8" column="1">
+        <item row="10" column="1">
          <spacer name="verticalSpacer">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
@@ -325,10 +376,17 @@
           </property>
          </spacer>
         </item>
-        <item row="1" column="2">
-         <widget class="QToolButton" name="toolButton_settings_db_path">
+        <item row="8" column="1">
+         <widget class="QLabel" name="label_settings_locale">
           <property name="text">
-           <string>...</string>
+           <string>Language</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QLineEdit" name="lineEdit_settings_game_path">
+          <property name="toolTip">
+           <string>Base path of WoW, e.g. 'C:\Program Files (x86)\World of Warcraft'</string>
           </property>
          </widget>
         </item>
@@ -342,56 +400,8 @@
           </property>
          </widget>
         </item>
-        <item row="2" column="1">
-         <widget class="QLabel" name="label_settings_game_path">
-          <property name="text">
-           <string>World of Warcraft Install Path</string>
-          </property>
-         </widget>
-        </item>
-        <item row="6" column="1">
-         <widget class="QLabel" name="label_settings_gh_proxy">
-          <property name="text">
-           <string>Github Proxy</string>
-          </property>
-         </widget>
-        </item>
-        <item row="4" column="1">
-         <widget class="QLabel" name="label">
-          <property name="text">
-           <string>Remote Source</string>
-          </property>
-         </widget>
-        </item>
-        <item row="5" column="1">
-         <widget class="QLineEdit" name="lineEdit_settings_repo">
-          <property name="toolTip">
-           <string>Used as source in remote mode, also for software update. Only accepting Github.</string>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QLabel" name="label_settings_db_path">
-          <property name="text">
-           <string>Local DB Path</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="2">
-         <widget class="QToolButton" name="toolButton_settings_game_path">
-          <property name="text">
-           <string>...</string>
-          </property>
-          <property name="toolButtonStyle">
-           <enum>Qt::ToolButtonIconOnly</enum>
-          </property>
-          <property name="arrowType">
-           <enum>Qt::NoArrow</enum>
-          </property>
-         </widget>
+        <item row="9" column="1">
+         <widget class="QComboBox" name="comboBox_settings_locale"/>
         </item>
        </layout>
       </widget>
