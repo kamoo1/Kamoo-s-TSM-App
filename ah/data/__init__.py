@@ -1,12 +1,19 @@
 import os
 import json
 from typing import Dict
+import logging
 
 __all__ = ("map_bonuses",)
+
+_logger = logging.getLogger("ah.data")
 
 
 def load_json(filename: str) -> Dict:
     path = os.path.join(os.path.dirname(__file__), filename)
+    if not os.path.isfile(path):
+        _logger.warning(f"File {path} not found.")
+        return {}
+
     with open(path) as f:
         return json.load(f)
 
