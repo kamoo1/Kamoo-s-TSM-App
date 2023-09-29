@@ -50,6 +50,11 @@ python -m ah.tsm_exporter --repo https://github.com/kamoo1/TSM-Backend {region} 
 
 > Please note that this repository only provides data for TW and KR realms. If you want to export data for other regions, you will have to run the update step yourself or use a repository that provides data for your region.
 
+### UI
+We also have a handy UI for this project:
+```bash
+python -m ah.ui
+```
 
 ## Release
 You can find a Windows executable in the [releases](https://github.com/kamoo1/TSM-Backend/releases) section for convenience.
