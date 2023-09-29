@@ -157,6 +157,8 @@ def patch_tsm(
                     f"file may have been patched already, "
                     f"or it's been updated by TSM."
                 )
+            else:
+                _logger.info(f"Patched {src!r}.")
 
 
 def file_type(mode="r") -> Callable:
