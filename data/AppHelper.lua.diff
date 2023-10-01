@@ -1,0 +1,8 @@
+@@ -4078,41 +4078,8 @@
+ nil%0A
+-%09if Environment.IsRetail() then%0A%09
+ %09reg
+@@ -4165,191 +4165,8 @@
+ TR%22%0A
+-%09else%0A%09%09local currentRealmName = private.SanitizedRealmName(Wow.GetRealmName())%0A%09%09region = ClassicRealms.GetRegion(currentRealmName) or (cVar ~= %22public-test%22 and cVar) or %22PTR%22%0A%09end%0A
+ %09if 

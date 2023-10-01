@@ -57,7 +57,7 @@ from ah.models.blizzard import (
 )
 from ah.api import GHAPI, BNAPI
 from ah.fs import remove_path
-from ah.patcher import patch_tsm
+from ah.patcher import main as patcher_main
 
 
 class LocaleHelper:
@@ -133,9 +133,7 @@ DEFAULT_SETTINGS_EXPORTER_PATCH_NOTIFIED = ("exporter/patch_notified", False)
 DEFAULT_SETTTING_EXPORTER_REALMS = ("exporter/selected_realms", "{}")
 DEFAULT_SETTTING_UPDATER_COMBOS = ("updater/selected_combos", "[]")
 
-PATH_PATCH_DIFF = "data/LibRealmInfo.lua.diff"
-PATH_PATCH_DIGEST = "data/LibRealmInfo.lua.sha256"
-
+BATCH_PATCH_JSON = "data/patches.json"
 
 _t = QCoreApplication.translate
 
@@ -1109,22 +1107,8 @@ class Window(QMainWindow, Ui_MainWindow):
         task()
 
     def on_patch_tsm(self) -> None:
-        with open(PATH_PATCH_DIGEST, "r") as f:
-            patch_digest = f.read().strip()
-
-        try:
-            warcraft_base = self.get_warcraft_base()
-        except ConfigError as e:
-            self.popup_error(_t("MainWindow", "Config Error"), str(e))
-            return
-
-        with open(PATH_PATCH_DIFF, "r") as f:
-            patch_tsm(
-                warcraft_base=warcraft_base,
-                src_digest=patch_digest,
-                diff=f,
-            )
-
+        args = ["batch_patch", BATCH_PATCH_JSON]
+        patcher_main(args)
         # pop up feedback
         QMessageBox.information(
             self,

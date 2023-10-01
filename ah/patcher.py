@@ -1,6 +1,7 @@
 import io
 import os
 import sys
+import json
 import hashlib
 import argparse
 from typing import Callable, List, Dict, Any
@@ -8,7 +9,6 @@ import logging
 
 from diff_match_patch import diff_match_patch
 
-from ah.models.blizzard import GameVersionEnum
 from ah.tsm_exporter import TSMExporter
 
 __all__ = (
@@ -42,6 +42,10 @@ class PatcherHashError(PatcherBaseError):
     pass
 
 
+class PatcherFileError(PatcherBaseError):
+    pass
+
+
 def get_dst(
     src_file: io.TextIOWrapper,
     diff_file: io.TextIOWrapper,
@@ -70,12 +74,9 @@ def get_diff(
     return text
 
 
-def get_hash(f: io.TextIOWrapper, read_rest: bool = False) -> str:
+def get_hash(f: io.TextIOWrapper) -> str:
     hash_str = hashlib.sha256()
     hash_str.update(f.read().encode("utf-8"))
-    if read_rest:
-        f.seek(0)
-
     return hash_str.hexdigest()
 
 
@@ -94,10 +95,14 @@ def patch(
     diff: io.TextIOWrapper,
     out: io.TextIOWrapper,
     in_place: bool,
-    src_digest: str | None,
+    src_digest: io.TextIOWrapper | None,
 ) -> None:
-    if src_digest is not None and src_digest != get_hash(src, read_rest=True):
-        raise PatcherHashError("Source file hash does not match.")
+    if src_digest is not None:
+        digest = src_digest.read()
+        digest = digest.strip()
+        if digest != get_hash(src):
+            raise PatcherHashError("Source file hash does not match.")
+        src.seek(0)
 
     dst_data = get_dst(src, diff)
     if in_place:
@@ -108,57 +113,41 @@ def patch(
     out.write(dst_data)
 
 
-def hash_(*, file: io.TextIOWrapper) -> None:
-    sys.stdout.write(get_hash(file) + "\n")
+def hash_(*, file: io.TextIOWrapper, out: io.TextIOWrapper) -> None:
+    h = get_hash(file)
+    out.write(h + "\n")
 
 
-def patch_tsm(
-    warcraft_base: str = None,
-    *,
-    src_digest: str,
-    diff: io.TextIOWrapper,
-) -> None:
-    """patch `LibRealmInfo.lua` with recently added realms.
-    many newly added kr, tw realms are not listed in existing
-    `LibRealmInfo.lua`, sometimes this will cause TSM assign
-    them a wrong the region.
+def batch_patch(jobs_json: io.TextIOWrapper) -> None:
+    try:
+        args_list = json.load(jobs_json)
 
-    f_diff: diff file
-    f_src_digest: source (original) file hash
+    except Exception:
+        _logger.fatal(f"batch_patch: failed to load jobs from {jobs_json.name!r}")
+        raise
 
-    """
-    warcraft_base = warcraft_base or TSMExporter.find_warcraft_base()
-    version_paths = (version.get_version_folder_name() for version in GameVersionEnum)
-    src_paths = (
-        os.path.join(
-            warcraft_base,
-            version,
-            *PATH_WOW_TO_TSM_LRI,
-        )
-        for version in version_paths
-    )
+    finally:
+        jobs_json.close()
 
-    for src in src_paths:
-        if not os.path.isfile(src):
-            continue
-        with open(src, "r+", encoding="utf-8") as f:
-            try:
-                diff.seek(0)
-                patch(
-                    src=f,
-                    diff=diff,
-                    out=None,
-                    in_place=True,
-                    src_digest=src_digest,
-                )
-            except PatcherHashError:
-                _logger.warning(
-                    f"Failed to patch {src!r}, "
-                    f"file may have been patched already, "
-                    f"or it's been updated by TSM."
-                )
-            else:
-                _logger.info(f"Patched {src!r}.")
+    # TODO: add os support other than Windows
+    warcraft_base = TSMExporter.find_warcraft_base()
+    if not warcraft_base:
+        raise PatcherFileError("Failed to find warcraft base.")
+
+    vars = {"warcraft_base": warcraft_base}
+    n = len(args_list)
+    for i, args in enumerate(args_list):
+        try:
+            args_ = [arg.format(**vars) for arg in args]
+            args_.insert(0, "patch")
+            main(args_)
+
+        except Exception:
+            _logger.warning(f"batch_patch: failed to run job {i+1}/{n}")
+            _logger.debug(f"batch_patch: {args_=!r}", exc_info=True)
+
+        else:
+            _logger.info(f"batch_patch: job {i+1}/{n} done")
 
 
 def file_type(mode="r") -> Callable:
@@ -212,8 +201,8 @@ def parse_args(args: List[str]) -> Dict[str, Any]:
     )
     parser_patch.add_argument(
         "--src_digest",
-        type=str,
-        help="sha256 digest of source file, "
+        type=file_type("r"),
+        help="a file containing sha256 digest of source file, "
         "if given, raises error if the digest does not match. "
         "always use digest generated from this program, because "
         "while reading, it standardizes all newlines to \\n, "
@@ -235,25 +224,27 @@ def parse_args(args: List[str]) -> Dict[str, Any]:
     )
     parser_hash.set_defaults(func=hash_)
     parser_hash.add_argument(
+        "--out",
+        type=file_type("w"),
+        default=sys.stdout,
+        help="output file, default: stdout",
+    )
+    parser_hash.add_argument(
         "file",
         type=file_type("r"),
         help="file to get the digest of",
     )
-    parser_patch_tsm = sub_parsers.add_parser(
-        "patch_tsm",
-        help="patch `LibRealmInfo.lua` for all versions of warcraft "
-        "with recently added realms.",
+    parser_batch_patch = sub_parsers.add_parser(
+        "batch_patch",
+        help="batch patch files.",
     )
-    parser_patch_tsm.set_defaults(func=patch_tsm)
-    parser_patch_tsm.add_argument(
-        "src_digest",
-        type=str,
-        help="sha256 digest of source file",
-    )
-    parser_patch_tsm.add_argument(
-        "diff",
+    parser_batch_patch.set_defaults(func=batch_patch)
+    parser_batch_patch.add_argument(
+        "jobs_json",
         type=file_type("r"),
-        help="diff file",
+        help="a json file containing a list of jobs, "
+        "each job is a list of arguments for patch function. "
+        'for example: [["--in_place", "path/src", "path/diff"], ...]',
     )
     parsed = parser.parse_args(args)
     if not hasattr(parsed, "func"):
@@ -270,16 +261,19 @@ def main(args: List[str] = sys.argv[1:]):
         "diff",
         "out",
         "file",
+        "src_digest",
     ]
     kwargs = parse_args(args)
     func = kwargs.pop("func")
+    stds = {sys.stdin.name, sys.stdout.name, sys.stderr.name}
 
     try:
         func(**kwargs)
     finally:
         for key in need_close:
-            if isinstance(kwargs.get(key), io.TextIOWrapper):
-                kwargs[key].close()
+            f = kwargs.get(key)
+            if isinstance(f, io.TextIOWrapper) and f.name not in stds:
+                f.close()
 
 
 if __name__ == "__main__":
