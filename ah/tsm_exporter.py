@@ -99,6 +99,7 @@ class TSMExporter:
     )
     NUMERIC_SET = set("0123456789")
     TSM_VERSION = 41200
+    MOCK_WARCRAFT_BASE = "fake_warcraft_base"
     _logger = logging.getLogger("TSMExporter")
 
     def __init__(self, db: AuctionDB, export_file: TextFile) -> None:
@@ -120,6 +121,9 @@ class TSMExporter:
 
     @classmethod
     def find_warcraft_base(cls) -> Optional[str]:
+        if "unittest" in sys.modules:
+            return cls.MOCK_WARCRAFT_BASE
+
         if sys.platform == "win32":
             import winreg
         else:
