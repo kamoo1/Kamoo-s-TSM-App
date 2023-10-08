@@ -1,9 +1,12 @@
+from __future__ import annotations
 from functools import partial
 from heapq import heappush, heappop
 from collections import defaultdict
 from logging import Logger, getLogger
 from copy import deepcopy
-from functools import total_ordering, lru_cache
+from functools import total_ordering, lru_cache, reduce
+from itertools import chain
+import json
 from typing import (
     List,
     Dict,
@@ -14,6 +17,7 @@ from typing import (
     Union,
     Iterable,
     Set,
+    TYPE_CHECKING,
 )
 
 import numpy as np
@@ -24,7 +28,7 @@ from ah.protobuf.item_db_pb2 import (
     ItemString as ItemStringPB,
     ItemStringType as ItemStringTypePB,
 )
-from ah.storage import BinaryFile
+from ah.storage import BinaryFile, TextFile
 from ah.models.base import (
     _RootDictMixin,
     _RootListMixin,
@@ -40,13 +44,16 @@ from ah.models.blizzard import (
     CommodityItem,
     FactionEnum,
     GameVersionEnum,
+    ConnectedRealm,
 )
 from ah.defs import SECONDS_IN
 from ah.data import map_bonuses
 
+if TYPE_CHECKING:
+    from ah.db import GithubFileForker
+
 __all__ = (
     "DBTypeEnum",
-    # "DBType",
     "DBExtEnum",
     "DBFileName",
     "MarketValueRecord",
@@ -55,6 +62,7 @@ __all__ = (
     "ItemString",
     "MapItemStringMarketValueRecords",
     "MapItemStringMarketValueRecord",
+    "Meta",
 )
 
 """
@@ -419,7 +427,6 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
                 f"{self}: no records, get_historical_market_value() returns 0"
             )
             return 0
-
         days_average = self.average_by_day(
             self, ts_now, self.HISTORICAL_DAYS, is_records_sorted=True
         )
@@ -462,9 +469,10 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
         if sum_weights:
             return int(sum_market_value / sum_weights + 0.5)
         else:
-            self._logger.debug(
-                f"{self}: all records expired, get_weighted_market_value() returns 0"
-            )
+            # XXX: This occurs fairly often, if no records found in recent 15 days
+            # self._logger.debug(
+            #     f"{self}: all records expired, get_weighted_market_value() returns 0"
+            # )
             return 0
 
 
@@ -493,12 +501,18 @@ class ItemString:
 
     - Filter the `bonuses` field by the keys of `MAP_BONUSES`, in case of the
       corresponding dict value of `MAP_BONUSES` contains any field in listed in
-      `SET_BONUS_ILVL_FIELDS`, filter out that bonus id as well.
+      `SET_BONUS_ILVL_FIELDS`, filter out that bonus id as well. (???)
 
     - Sort the `bonuses` field, `bonuses` is a tuple of ints.
 
     - Pets don't have `mods` or `bonuses` fields, they take `breed_id` from
       `AuctionItem` as their `id` field.
+
+    item strings from DB will get instantiated by `from_protobuf`, which doesn't
+    go through the pre-processing steps as in `from_item`. in case of `MAP_BONUSES`
+    getting updated by Blizzard causing the hash of `ItemString` to change within
+    the same item: only newly added records will be affected, old records of such
+    items will eventually expire and get removed from DB.
     """
 
     _logger: ClassVar[Logger] = getLogger("ItemString")
@@ -1144,9 +1158,17 @@ class MapItemStringMarketValueRecords(_RootDictMixin[ItemString, MarketValueReco
         return self.to_protobuf().SerializeToString()
 
     @classmethod
-    def from_file(cls, file: BinaryFile) -> "MapItemStringMarketValueRecords":
+    def from_file(
+        cls, file: BinaryFile, forker: GithubFileForker = None
+    ) -> "MapItemStringMarketValueRecords":
+        if forker:
+            forker.ensure_file(file)
+
         if not file.exists():
-            raise FileNotFoundError(f"{file} not found.")
+            cls._logger.info(
+                f"{file!r} not found, returning empty {cls.__name__!r} object."
+            )
+            return cls()
 
         with file.open("rb") as f:
             obj = cls.from_protobuf_bytes(f.read())
@@ -1157,3 +1179,136 @@ class MapItemStringMarketValueRecords(_RootDictMixin[ItemString, MarketValueReco
         with file.open("wb") as f:
             f.write(self.to_protobuf_bytes())
             self._logger.info(f"{file} saved.")
+
+
+class Meta:
+    _logger = getLogger("Meta")
+
+    def __init__(self, data: Dict = None) -> None:
+        """
+        we store meta data in a json file, the structure is as follows:
+        >>> {
+                "update": {
+                    "start_ts": 0,
+                    "end_ts": 0,
+                    "duration": 0,
+                },
+                "connected_realms": {
+                    $connected_realm_id: [
+                        {
+                            "name": $realm_name(native),
+                            "id": $realm_id,
+                            "slug": $realm_slug,
+                            "is_hardcore": $is_hardcore(bool),
+                        },
+                        ...
+                    ],
+                    ...
+                },
+                "system": {...}
+            }
+
+        """
+
+        self._data = data or {
+            "update": {
+                "start_ts": None,
+                "end_ts": None,
+                "duration": None,
+            },
+            "connected_realms": {},
+        }
+
+    def add_connected_realm(self, crid: int, connected_realm: ConnectedRealm) -> None:
+        realms = []
+        for realm in connected_realm.realms:
+            realms.append(
+                {
+                    "name": realm.name,
+                    "id": realm.id,
+                    "slug": realm.slug,
+                    "is_hardcore": realm.is_hardcore(),
+                }
+            )
+
+        if crid != connected_realm.id:
+            self._logger.critical(
+                f"connected realm id mismatch: req {crid=}, resp {connected_realm.id=}"
+            )
+            raise ValueError("connected realm id mismatch")
+
+        self._data["connected_realms"][connected_realm.id] = realms
+
+    def set_update_ts(self, start_ts: int, end_ts: int) -> None:
+        self._data["update"]["start_ts"] = start_ts
+        self._data["update"]["end_ts"] = end_ts
+        self._data["update"]["duration"] = end_ts - start_ts
+
+    def set_system(self, system: Dict) -> None:
+        self._data["system"] = system
+
+    def get_connected_realm_ids(self) -> Tuple[int]:
+        return tuple(map(int, self._data["connected_realms"].keys()))
+
+    def get_connected_realm_names(self) -> Tuple[str]:
+        return tuple(
+            map(
+                lambda x: x["name"],
+                chain.from_iterable(self._data["connected_realms"].values()),
+            )
+        )
+
+    def iter_connected_realms(
+        self,
+    ) -> Generator[Tuple[int, Set[str], bool], None, None]:
+        for crid, crs in self._data["connected_realms"].items():
+            if not crs:
+                continue
+            # make sure realms are same type (hardcore or not)
+            n_hc = reduce(lambda s, realm: s + 1 if realm["is_hardcore"] else s, crs, 0)
+            if not (n_hc == 0 or n_hc == len(crs)):
+                self._logger.warning(
+                    f"connected realm {crid=} contains realms of different types!"
+                )
+
+            cr_names = set()
+            for realm in crs:
+                cr_names.add(realm["name"])
+
+            is_hc = n_hc == len(crs)
+            yield crid, cr_names, is_hc
+
+    def get_update_ts(self) -> Tuple[int, int]:
+        return self._data["update"]["start_ts"], self._data["update"]["end_ts"]
+
+    @classmethod
+    def from_file(cls, file: TextFile, forker: GithubFileForker = None) -> "Meta":
+        if forker:
+            forker.ensure_file(file)
+
+        if not file.exists():
+            cls._logger.info(
+                f"{file!r} not found, returning empty {cls.__name__!r} object."
+            )
+            return cls()
+
+        with file.open("r") as f:
+            data = json.load(f)
+
+        # convert keys to int
+        data["connected_realms"] = {
+            int(k): v for k, v in data["connected_realms"].items()
+        }
+        meta = cls(data=data)
+        cls._logger.info(f"{file} loaded.")
+        return meta
+
+    def to_file(self, file: TextFile) -> None:
+        # convert keys to str
+        data = deepcopy(self._data)
+        data["connected_realms"] = {
+            str(k): v for k, v in self._data["connected_realms"].items()
+        }
+        with file.open("w") as f:
+            json.dump(data, f, indent=4)
+        self._logger.info(f"{file} saved.")

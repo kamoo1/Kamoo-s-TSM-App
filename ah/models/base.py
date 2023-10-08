@@ -31,7 +31,10 @@ else:
     # Note: must not use `type`
     # https://stackoverflow.com/questions/69328274
     class StrEnum_(str, Enum):
-        pass
+        # Add `__str__` to make it behave as expected in case of `str(enum)`
+        # https://blog.pecar.me/python-enum
+        def __str__(self) -> str:
+            return self.value
 
     class IntEnum_(int, Enum):
         pass

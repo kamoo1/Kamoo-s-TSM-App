@@ -3,6 +3,7 @@ source = ah/
 omit =
     ah/vendors/*
     ah/protobuf/*
+    ah/ui/*
 branch = True
 data_file = .coverage
 

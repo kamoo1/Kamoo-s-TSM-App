@@ -13,7 +13,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from pydantic import Field, root_validator
+from pydantic import Field, root_validator, Extra
 
 from ah.models.base import _BaseModel, StrEnum_
 
@@ -37,6 +37,8 @@ __all__ = (
     "CommodityItem",
     "Commodity",
     "CommoditiesResponse",
+    "Realm",
+    "ConnectedRealm",
 )
 
 
@@ -328,6 +330,13 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
     id: Any
     name: Any
 
+    MAP_FACTION_AH_ID: ClassVar[Dict[FactionEnum, int]] = {
+        FactionEnum.ALLIANCE: 2,
+        FactionEnum.HORDE: 6,
+        # `None` for all factions (retail)
+        None: None,
+    }
+
     def get_auctions(self) -> List[GenericAuctionInterface]:
         return self.auctions
 
@@ -340,9 +349,14 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
         bn_api: BNAPI,
         namespace: Namespace,
         connected_realm_id: str,
-        faction: FactionEnum,
+        faction: FactionEnum | None,
     ) -> "AuctionsResponse":
-        resp = bn_api.pull_auctions(namespace, connected_realm_id, faction=faction)
+        auction_house_id = cls.MAP_FACTION_AH_ID[faction]
+        resp = bn_api.get_auctions(
+            namespace,
+            connected_realm_id,
+            auction_house_id=auction_house_id,
+        )
         return cls.parse_obj(resp)
 
 
@@ -416,9 +430,52 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
         return self.auctions
 
     @classmethod
-    def from_api(cls, bn_api: BNAPI, namespace: Namespace) -> "CommoditiesResponse":
-        resp = bn_api.pull_commodities(namespace)
+    def from_api(
+        cls, bn_api: BNAPI, namespace: Namespace
+    ) -> "CommoditiesResponse":
+        resp = bn_api.get_commodities(namespace)
         return cls.parse_obj(resp)
 
     def get_timestamp(self) -> int:
         return self.timestamp
+
+
+class Realm(_BaseModel):
+    id: int
+    region: Any
+    connected_realm: Any
+    name: str
+    category: str
+    locale: str
+    # TODO: use tz type?
+    timezone: str
+    type: Any
+    is_tournament: bool
+    slug: str
+    # wow/realm response has this field, but not connected realm response
+    links: Optional[Any] = Field(alias="_links")
+
+    CATE_HARDCORE: ClassVar[str] = "Hardcore"
+
+    def is_hardcore(self) -> bool:
+        return self.category == self.CATE_HARDCORE
+
+
+class ConnectedRealm(_BaseModel):
+    # conected realm id
+    id: int
+    realms: List[Realm]
+
+    @classmethod
+    def from_api(
+        cls,
+        bn_api: BNAPI,
+        namespace: Namespace,
+        connected_realm_id: int,
+    ) -> "ConnectedRealm":
+        resp = bn_api.get_connected_realm(namespace, connected_realm_id)
+        return cls.parse_obj(resp)
+
+    class Config:
+        # there are just too many fields we don't care about
+        extra = Extra.ignore

@@ -4,7 +4,9 @@ import tempfile
 import json
 import gzip
 
-from ah.db import AuctionDB
+from ah.errors import DownloadError
+from ah.db import DBHelper, GithubFileForker
+from ah.updater import Updater
 from ah.models import (
     MapItemStringMarketValueRecord,
     MapItemStringMarketValueRecords,
@@ -18,6 +20,7 @@ from ah.models import (
     DBFileName,
     DBExtEnum,
     FactionEnum,
+    Meta,
 )
 
 
@@ -107,9 +110,13 @@ class DummyGHAPI:
         if url.endswith("json"):
             # meta file
             meta = {
-                "start_ts": 1,
-                "end_ts": 2,
-                "duration": 1,
+                "update": {
+                    "start_ts": 1,
+                    "end_ts": 2,
+                    "duration": 1,
+                },
+                "connected_realms": {},
+                "system": {},
             }
             return json.dumps(meta).encode()
         else:
@@ -123,89 +130,9 @@ class TestAuctionDB(TestCase):
     def tearDown(self):
         self.tmp_dir.cleanup()
 
-    def test_init(self):
-        db_path = self.tmp_dir.name
-        expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
-        compress = True
-        site = "https://example.com"
-        region = "us"
-        ts_base = 1000
-        gh_api = DummyGHAPI(
-            site,
-            NameSpaceCategoriesEnum.DYNAMIC,
-            GameVersionEnum.CLASSIC_WLK,
-            region,
-            2,
-            2,
-            2,
-            ts_base,
-            faction=FactionEnum.HORDE,
-        )
-        fork_repo = "github.com/user/repo"
-
-        # expires time too short
-        AuctionDB(db_path, expires, compress)
-        self.assertRaises(
-            ValueError,
-            AuctionDB,
-            db_path,
-            expires - 1,
-            compress,
-        )
-
-        # invalid mode
-        AuctionDB(db_path, expires, compress, AuctionDB.MODE_LOCAL_RW)
-        self.assertRaises(
-            ValueError,
-            AuctionDB,
-            db_path,
-            expires,
-            compress,
-            "invalid_mode",
-        )
-
-        # remote mode without fork_repo and gh_api
-        AuctionDB(
-            db_path,
-            expires,
-            compress,
-            AuctionDB.MODE_REMOTE_R,
-            fork_repo=fork_repo,
-            gh_api=gh_api,
-        )
-        self.assertRaises(
-            ValueError,
-            AuctionDB,
-            db_path,
-            expires,
-            compress,
-            AuctionDB.MODE_REMOTE_R,
-        )
-        self.assertRaises(
-            ValueError,
-            AuctionDB,
-            db_path,
-            expires,
-            compress,
-            AuctionDB.MODE_REMOTE_R,
-            fork_repo=fork_repo,
-        )
-
-        # invalid fork_repo
-        self.assertRaises(
-            ValueError,
-            AuctionDB,
-            db_path,
-            expires,
-            compress,
-            AuctionDB.MODE_REMOTE_R,
-            fork_repo="invalid_repo",
-            gh_api=gh_api,
-        )
-
     def assert_db(
         self,
-        db: AuctionDB,
+        db_helper: DBHelper,
         category: NameSpaceCategoriesEnum,
         game_version: GameVersionEnum,
         region: str,
@@ -213,6 +140,7 @@ class TestAuctionDB(TestCase):
         n_item: int,
         n_record_per_item: int,
         faction: Optional[FactionEnum] = None,
+        forker: Optional[GithubFileForker] = None,
     ):
         namespace = Namespace(
             category=category,
@@ -220,19 +148,16 @@ class TestAuctionDB(TestCase):
             region=region,
         )
         for crid in range(n_crid):
-            file = db.get_file(
+            file = db_helper.get_file(
                 namespace, DBTypeEnum.AUCTIONS, crid=crid, faction=faction
             )
-            map_records = db.load_db(file)
+            map_records = MapItemStringMarketValueRecords.from_file(file, forker=forker)
             self.assertEqual(len(map_records), n_item)
             for item_string in map_records:
                 self.assertEqual(len(map_records[item_string]), n_record_per_item)
 
-    def test_mode_remote(self):
-        mode = AuctionDB.MODE_REMOTE_R
+    def test_fork(self):
         db_path = self.tmp_dir.name
-        expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
-        compress = True
         fork_repo = "github.com/user/repo"
 
         site = "https://example.com"
@@ -259,16 +184,10 @@ class TestAuctionDB(TestCase):
             faction=faction,
         )
 
-        db = AuctionDB(
-            db_path,
-            expires,
-            compress,
-            mode,
-            fork_repo=fork_repo,
-            gh_api=gh_api,
-        )
+        db_helper = DBHelper(db_path)
+        forker = GithubFileForker(db_path, fork_repo, gh_api)
         self.assert_db(
-            db,
+            db_helper,
             category,
             game_version,
             region,
@@ -276,43 +195,38 @@ class TestAuctionDB(TestCase):
             n_item,
             n_record_per_item,
             faction=faction,
+            forker=forker,
         )
 
         # test meta file
-        meta_file = db.get_file(namespace, DBTypeEnum.META)
-        meta = db.load_meta(meta_file)
-        self.assertEqual(meta["duration"], 1)
-
-        # assert raises when trying to update meta
-        self.assertRaises(ValueError, db.update_meta, meta_file, {})
+        meta_file = db_helper.get_file(namespace, DBTypeEnum.META)
+        meta = Meta.from_file(meta_file, forker=forker)
+        self.assertEqual(meta.get_update_ts(), (1, 2))
 
         # pick one of the db file for testing
         pick_crid = n_crid - 1
-        pick_file = db.get_file(
+        pick_file = db_helper.get_file(
             namespace,
             DBTypeEnum.AUCTIONS,
             crid=pick_crid,
             faction=faction,
         )
-        pick_map = db.load_db(pick_file)
+        pick_map = MapItemStringMarketValueRecords.from_file(pick_file, forker=forker)
 
         # assert raises when file not in remote
-        bad_file = db.get_file(
+        bad_file = db_helper.get_file(
             namespace,
             DBTypeEnum.AUCTIONS,
             crid=n_crid + 1,
             faction=faction,
         )
-        self.assertRaises(FileNotFoundError, db.fork_file, bad_file)
-        print("--------- expect raise ---------")
-        self.assertFalse(db.load_db(bad_file))  # return empty map
-        print("--------------------------------")
-
-        # assert raises when trying to update
-        increment = MapItemStringMarketValueRecord()
-        self.assertRaises(ValueError, db.update_db, pick_file, increment, ts_base)
+        self.assertRaises(DownloadError, forker._fork_file, bad_file)
+        self.assertFalse(MapItemStringMarketValueRecords.from_file(bad_file, forker))
 
         # force update local
+        # NOTE: use to be a follow up "load" call that overwrites these changes
+        #       to test out the "remote only" mode, but that mode is removed
+        #       so here's this force update left over
         new_item_string = ItemString(
             type=ItemStringTypeEnum.ITEM,
             id=n_item,
@@ -330,33 +244,8 @@ class TestAuctionDB(TestCase):
         pick_map.to_file(pick_file)
         self.assertEqual(len(pick_map), n_item + 1)
 
-        # assert local changes discarded
-        db = AuctionDB(
-            db_path,
-            expires,
-            compress,
-            AuctionDB.MODE_REMOTE_R,
-            fork_repo=fork_repo,
-            gh_api=gh_api,
-        )
-        pick_map_ = db.load_db(pick_file)
-        self.assertEqual(len(pick_map_), n_item)
-        self.assert_db(
-            db,
-            category,
-            game_version,
-            region,
-            n_crid,
-            n_item,
-            n_record_per_item,
-            faction=faction,
-        )
-
     def test_mode_local_remote(self):
-        mode = AuctionDB.MODE_LOCAL_REMOTE_RW
         db_path = self.tmp_dir.name
-        expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
-        compress = True
         fork_repo = "github.com/user/repo"
 
         site = "https://example.com"
@@ -382,17 +271,10 @@ class TestAuctionDB(TestCase):
             ts_base,
             faction=faction,
         )
-
-        db = AuctionDB(
-            db_path,
-            expires,
-            compress,
-            mode,
-            fork_repo=fork_repo,
-            gh_api=gh_api,
-        )
+        db_helper = DBHelper(db_path)
+        forker = GithubFileForker(db_path, fork_repo, gh_api)
         self.assert_db(
-            db,
+            db_helper,
             category,
             game_version,
             region,
@@ -400,11 +282,12 @@ class TestAuctionDB(TestCase):
             n_item,
             n_record_per_item,
             faction=faction,
+            forker=forker,
         )
 
         # pick one of the db file for testing
         pick_crid = n_crid - 1
-        pick_file = db.get_file(
+        pick_file = db_helper.get_file(
             namespace,
             DBTypeEnum.AUCTIONS,
             crid=pick_crid,
@@ -427,37 +310,31 @@ class TestAuctionDB(TestCase):
         increment = MapItemStringMarketValueRecord(
             __root__={new_item_string: new_record}
         )
-        db.update_db(pick_file, increment, ts_base + n_record_per_item)
-        pick_map = db.load_db(pick_file)
+        updater = Updater({}, db_helper, forker=forker)
+        updater.save_increment(pick_file, increment, ts_base + n_record_per_item)
+        pick_map = MapItemStringMarketValueRecords.from_file(pick_file, forker=forker)
         self.assertEqual(len(pick_map), n_item + 1)
 
         # update meta file
-        meta_file = db.get_file(namespace, DBTypeEnum.META)
-        db.update_meta(meta_file, {"start_ts": 2, "end_ts": 3, "duration": 1})
+        meta_file = db_helper.get_file(namespace, DBTypeEnum.META)
+        meta = Meta.from_file(meta_file, forker=forker)
+        meta._data["update"]["start_ts"] = 2
+        meta._data["update"]["end_ts"] = 3
+        meta.to_file(meta_file)
 
         # assert local changes are kept
-        db = AuctionDB(
-            db_path,
-            expires,
-            compress,
-            mode,
-            fork_repo=fork_repo,
-            gh_api=gh_api,
-        )
-        pick_map = db.load_db(pick_file)
+        pick_map = MapItemStringMarketValueRecords.from_file(pick_file, forker=forker)
         self.assertEqual(len(pick_map), n_item + 1)
-        meta = db.load_meta(meta_file)
+        meta = Meta.from_file(meta_file, forker=forker)
 
         # assert local changes in meta
-        self.assertEqual(meta["start_ts"], 2)
-        self.assertEqual(meta["end_ts"], 3)
-        self.assertEqual(meta["duration"], 1)
+        meta_ts = meta._data["update"]
+        self.assertEqual(meta_ts["start_ts"], 2)
+        self.assertEqual(meta_ts["end_ts"], 3)
+        self.assertEqual(meta_ts["duration"], 1)
 
     def test_local(self):
-        mode = AuctionDB.MODE_LOCAL_RW
         db_path = self.tmp_dir.name
-        expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
-        compress = True
         region = "tw"
         category = NameSpaceCategoriesEnum.DYNAMIC
         game_version = GameVersionEnum.CLASSIC
@@ -467,17 +344,15 @@ class TestAuctionDB(TestCase):
             region=region,
         )
 
-        db = AuctionDB(
-            db_path,
-            expires,
-            compress,
-            mode,
+        db_helper = DBHelper(db_path)
+        forker = None
+        self.assert_db(
+            db_helper, category, game_version, region, 0, 0, 0, forker=forker
         )
-        self.assert_db(db, category, game_version, region, 0, 0, 0)
 
         # pick one of the db file for testing
         pick_crid = 1
-        pick_file = db.get_file(
+        pick_file = db_helper.get_file(
             namespace, DBTypeEnum.AUCTIONS, crid=pick_crid, faction=FactionEnum.HORDE
         )
         pick_item_id = 1
@@ -499,25 +374,18 @@ class TestAuctionDB(TestCase):
         increment = MapItemStringMarketValueRecord(
             __root__={new_item_string: new_record}
         )
-        db.update_db(pick_file, increment, pick_ts)
-        pick_map = db.load_db(pick_file)
+        updater = Updater({}, db_helper, forker=forker)
+        updater.save_increment(pick_file, increment, pick_ts)
+        pick_map = MapItemStringMarketValueRecords.from_file(pick_file, forker=forker)
         self.assertEqual(len(pick_map), 1)
 
         # assert local changes are kept
-        db = AuctionDB(
-            db_path,
-            expires,
-            compress,
-            mode,
-        )
-        pick_map = db.load_db(pick_file)
+        pick_map = MapItemStringMarketValueRecords.from_file(pick_file, forker=forker)
         self.assertEqual(len(pick_map), 1)
 
     def test_load_db(self):
-        mode = AuctionDB.MODE_REMOTE_R
+        # mode = AuctionManager.MODE_REMOTE_R
         db_path = self.tmp_dir.name
-        expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
-        compress = True
         fork_repo = "github.com/user/repo"
 
         site = "https://example.com"
@@ -541,66 +409,53 @@ class TestAuctionDB(TestCase):
             game_version=game_version,
             region=region,
         )
-
-        db = AuctionDB(
-            db_path,
-            expires,
-            compress,
-            mode,
-            fork_repo=fork_repo,
-            gh_api=gh_api,
-        )
+        db_helper = DBHelper(db_path)
+        forker = GithubFileForker(db_path, fork_repo, gh_api)
         self.assert_db(
-            db, category, game_version, region, n_crid, n_item, n_record_per_item
+            db_helper,
+            category,
+            game_version,
+            region,
+            n_crid,
+            n_item,
+            n_record_per_item,
+            forker=forker,
         )
 
         pick_crid = n_crid - 1
-        pick_file = db.get_file(namespace, DBTypeEnum.AUCTIONS, crid=pick_crid)
-        pick_map = db.load_db(pick_file)
-        pick_map_ = db.load_db(pick_file.file_name)
+        pick_file = db_helper.get_file(namespace, DBTypeEnum.AUCTIONS, crid=pick_crid)
+        pick_map = MapItemStringMarketValueRecords.from_file(pick_file, forker=forker)
         self.assertTrue(pick_map)
-        self.assertTrue(pick_map_)
-        self.assertEqual(pick_map.to_protobuf_bytes(), pick_map_.to_protobuf_bytes())
 
         pick_crid = None
-        pick_file = db.get_file(namespace, DBTypeEnum.COMMODITIES, crid=pick_crid)
-        pick_map = db.load_db(pick_file)
-        pick_map_ = db.load_db(pick_file.file_name)
+        pick_file = db_helper.get_file(
+            namespace, DBTypeEnum.COMMODITIES, crid=pick_crid
+        )
+        pick_map = MapItemStringMarketValueRecords.from_file(pick_file, forker=forker)
         self.assertTrue(pick_map)
-        self.assertTrue(pick_map_)
-        self.assertEqual(pick_map.to_protobuf_bytes(), pick_map_.to_protobuf_bytes())
 
     @classmethod
-    def make_db_file(cls, db, region, crid):
+    def make_db_file(cls, db_helper, region, crid):
         namespace = Namespace(
             category=NameSpaceCategoriesEnum.DYNAMIC,
             game_version=GameVersionEnum.CLASSIC,
             region=region,
         )
         db_type_e = DBTypeEnum.AUCTIONS
-        db_file = db.get_file(
+        db_file = db_helper.get_file(
             namespace, db_type_e, crid=crid, faction=FactionEnum.ALLIANCE
         )
         db_file.touch()
         return db_file.file_name
 
     def test_list_db_name(self):
-        mode = AuctionDB.MODE_LOCAL_RW
         db_path = self.tmp_dir.name
-        expires = AuctionDB.MIN_RECORDS_EXPIRES_IN
-        compress = True
-
         region = "us"
         n_crid = 2
 
-        db = AuctionDB(
-            db_path,
-            expires,
-            compress,
-            mode,
-        )
+        db_helper = DBHelper(db_path)
         expected = set()
         for crid in range(n_crid):
-            fn = self.make_db_file(db, region, crid)
+            fn = self.make_db_file(db_helper, region, crid)
             expected.add(fn)
-        self.assertEqual(set(db.list_file()), expected)
+        self.assertEqual(set(db_helper.list_file()), expected)
