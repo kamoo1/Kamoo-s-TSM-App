@@ -46,9 +46,10 @@ from ah import config
 from ah.ui.main_view import Ui_MainWindow
 from ah.tsm_exporter import TSMExporter, main as exporter_main
 from ah.updater import main as updater_main
-from ah.db import AuctionDB
+from ah.db import GithubFileForker, DBHelper
 from ah.cache import Cache
 from ah.models.base import StrEnum_
+from ah.models.self import DBTypeEnum, Meta
 from ah.models.blizzard import (
     RegionEnum,
     GameVersionEnum,
@@ -278,7 +279,7 @@ class WarCraftBaseValidator(VisualValidator):
 
 class RepoValidator(VisualValidator):
     def validate(self, text: str, pos: int) -> Tuple[QValidator.State, str, int]:
-        if AuctionDB.validate_repo(text):
+        if GithubFileForker.validate_repo(text):
             state = self.State.Acceptable
 
         else:
@@ -915,23 +916,14 @@ class Window(QMainWindow, Ui_MainWindow):
             namespace = self.get_namespace()
 
             if self.checkBox_exporter_remote.isChecked():
-                mode = AuctionDB.MODE_REMOTE_R
                 repo = self.get_repo()
                 gh_api = self.get_gh_api()
+                forker = GithubFileForker(data_path, repo, gh_api)
 
             else:
-                mode = AuctionDB.MODE_LOCAL_RW
-                repo = None
-                gh_api = None
+                forker = None
 
-            db = AuctionDB(
-                data_path,
-                config.MARKET_VALUE_RECORD_EXPIRES,
-                use_compression=config.DEFAULT_DB_COMPRESS,
-                mode=mode,
-                fork_repo=repo,
-                gh_api=gh_api,
-            )
+            db_helper = DBHelper(data_path)
 
         except ConfigError as e:
             self.popup_error(_t("MainWindow", "Config Error"), str(e))
@@ -940,9 +932,10 @@ class Window(QMainWindow, Ui_MainWindow):
                 widget.setEnabled(True)
             return
 
-        def on_data(connected_realms: Dict[str, List[str]]):
+        def on_data(data: Dict) -> None:
+            meta = Meta(data=data)
             tups_realm_crid = []
-            for crid, realms in connected_realms.items():
+            for crid, realms, _ in meta.iter_connected_realms():
                 for realm in realms:
                     tups_realm_crid.append((realm, crid))
 
@@ -964,9 +957,9 @@ class Window(QMainWindow, Ui_MainWindow):
         )
         def task():
             # ioerror gets ignored by `load_meta`, returns empty dict.
-            meta = db.load_meta(namespace)
-            connected_reamls = meta.get("connected_realms", {})
-            return connected_reamls
+            meta_file = db_helper.get_file(namespace, DBTypeEnum.META)
+            meta = Meta.from_file(meta_file, forker=forker)
+            return meta._data
 
         task()
 

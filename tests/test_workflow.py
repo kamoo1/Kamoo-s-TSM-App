@@ -15,10 +15,12 @@ from ah.models import (
     NameSpaceCategoriesEnum,
     DBTypeEnum,
     RegionEnum,
+    Realm,
 )
-from ah.api import BNAPI
-from ah.db import AuctionDB
-from ah.updater import main, parse_args
+from ah.db import DBHelper
+from ah.updater import main as updater_main, parse_args as updater_parse_args
+from ah.tsm_exporter import main as exporter_main, parse_args as exporter_parse_args
+from ah.fs import ensure_path
 
 
 class DummyAPIWrapper:
@@ -42,22 +44,33 @@ class DummyAPIWrapper:
 
     def get_connected_realm(self, region, connected_realm_id):
         return {
+            "id": connected_realm_id,
             "realms": [
                 {
-                    "id": 1,
-                    "name": "realm1",
-                    "slug": "realm-1",
+                    "id": connected_realm_id * 10 + 1,
+                    "name": f"realm{connected_realm_id * 10 + 1}",
+                    "slug": "",
                     "timezone": "America/New_York",
                     "locale": "en_US",
+                    "region": region,
+                    "connected_realm": {},
+                    "category": "" if connected_realm_id % 2 else Realm.CATE_HARDCORE,
+                    "type": "",
+                    "is_tournament": False,
                 },
                 {
-                    "id": 2,
-                    "name": "realm2",
-                    "slug": "realm-2",
+                    "id": connected_realm_id * 10 + 2,
+                    "name": f"realm{connected_realm_id * 10 + 2}",
+                    "slug": "",
                     "timezone": "America/New_York",
                     "locale": "en_US",
+                    "region": region,
+                    "connected_realm": {},
+                    "category": "" if connected_realm_id % 2 else Realm.CATE_HARDCORE,
+                    "type": "",
+                    "is_tournament": False,
                 },
-            ]
+            ],
         }
 
     def get_auctions(self, region, connected_realm_id, auction_house_id=None):
@@ -141,7 +154,9 @@ class TestWorkflow(TestCase):
         }
 
     # TODO: test remove expired, test save load data integrity (include orderr)
-    def assert_workflow(self, temp_path, ns_cate, game_ver, price_groups, expected_mv):
+    def assert_updater_workflow(
+        self, temp_path, ns_cate, game_ver, price_groups, expected_mv
+    ):
         # we only expect one entry (unique item id) in this test, if price group not
         # present, then there's no item id
         expected_number_of_entries = 1 if price_groups else 0
@@ -154,14 +169,15 @@ class TestWorkflow(TestCase):
             game_version=game_ver,
             region=region,
         )
-        task_manager = Updater(BNAPI(wrapper=DummyAPIWrapper()), AuctionDB(temp_path))
-        file = task_manager.db.get_file(namespace, DBTypeEnum.COMMODITIES)
+        db_helper = DBHelper(temp_path)
+        updater = Updater(DummyAPIWrapper(), db_helper, forker=None)
+        file = db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
         resp = CommoditiesResponse.parse_obj(
             self.mock_request_commodities_single_item(item_id, price_groups)
         )
         timestamp = resp.timestamp
         increments = MapItemStringMarketValueRecord.from_response(resp)
-        task_manager.db.update_db(file, increments, timestamp)
+        updater.save_increment(file, increments, timestamp)
 
         map_item_string_records = MapItemStringMarketValueRecords.from_file(file)
         self.assertEqual(expected_number_of_entries, len(map_item_string_records))
@@ -177,7 +193,7 @@ class TestWorkflow(TestCase):
             self.assertEqual(timestamp, record.timestamp)
             self.assertEqual(expected_mv, record.market_value)
 
-    def test_workflow(self):
+    def test_updater_1(self):
         price_groups = [
             (5, 1),
             (13, 2),
@@ -198,23 +214,27 @@ class TestWorkflow(TestCase):
         cate = NameSpaceCategoriesEnum.STATIC
         game_ver = GameVersionEnum.RETAIL
         with temp:
-            self.assert_workflow(temp.name, cate, game_ver, price_groups, expected_mv)
+            self.assert_updater_workflow(
+                temp.name, cate, game_ver, price_groups, expected_mv
+            )
 
-    def test_workflow_edge(self):
+    def test_updater_edge(self):
         price_groups = []
         expected_mv = None
         temp = TemporaryDirectory()
         cate = NameSpaceCategoriesEnum.DYNAMIC
         game_ver = GameVersionEnum.RETAIL
         with temp:
-            self.assert_workflow(temp.name, cate, game_ver, price_groups, expected_mv)
+            self.assert_updater_workflow(
+                temp.name, cate, game_ver, price_groups, expected_mv
+            )
 
-    def test_work_flow_basic_integrity(self):
+    def test_updater_integrity(self):
         temp = TemporaryDirectory()
-        db = AuctionDB(temp.name)
-        task_manager = Updater(
-            BNAPI(wrapper=DummyAPIWrapper()),
-            db,
+        db_helper = DBHelper(temp.name)
+        updater = Updater(
+            DummyAPIWrapper(),
+            db_helper,
         )
         region = "us"
         namespace = Namespace(
@@ -254,11 +274,11 @@ class TestWorkflow(TestCase):
 
             timestamp = test_resp.timestamp
             crid = 123
-            file = task_manager.db.get_file(namespace, DBTypeEnum.AUCTIONS, crid)
+            file = db_helper.get_file(namespace, DBTypeEnum.AUCTIONS, crid)
             increments = MapItemStringMarketValueRecord.from_response(test_resp)
 
             for i in range(1, 10):
-                map_id_records = task_manager.db.update_db(
+                map_id_records = updater.save_increment(
                     file, increments, test_resp.timestamp
                 )
                 # map_id_records = MapItemStringMarketValueRecords.from_file(file)
@@ -276,15 +296,15 @@ class TestWorkflow(TestCase):
 
     # patch time.time() to return a fixed value
     @mock.patch("time.time", return_value=1000)
-    def test_work_flow_2(self, *args):
+    def test_updater_2(self, *args):
         temp = TemporaryDirectory()
 
         region = "us"
         game_version = GameVersionEnum.RETAIL
         db_path = f"{temp.name}/db"
-        bn_api = BNAPI(wrapper=DummyAPIWrapper())
+        bn_api = DummyAPIWrapper()
         with temp:
-            main(
+            updater_main(
                 db_path=db_path,
                 repo=None,
                 gh_proxy=None,
@@ -304,7 +324,7 @@ class TestWorkflow(TestCase):
             }
             self.assertSetEqual(expected, files)
 
-    def test_parse_args(self):
+    def test_updater_parse_args(self):
         raw_args = [
             "--db_path",
             "db",
@@ -312,7 +332,152 @@ class TestWorkflow(TestCase):
             "classic_wlk",
             "us",
         ]
-        args = parse_args(raw_args)
+        args = updater_parse_args(raw_args)
         self.assertEqual(args.region, RegionEnum.US)
         self.assertEqual(args.db_path, "db")
         self.assertEqual(args.game_version, GameVersionEnum.CLASSIC_WLK)
+
+    def test_exporter_parse_args(self):
+        wow_folders = [
+            "_classic_",
+            "_retail_",
+        ]
+        expected_repo = "https://github.com/user/repo"
+        expected_gh_proxy = "https://ghproxy.com"
+        expected_db_path = "db"
+
+        temp = TemporaryDirectory()
+        with temp:
+            expected_wow_base = f"{temp.name}/wow"
+            for folder in wow_folders:
+                ensure_path(f"{expected_wow_base}/{folder}")
+            raw_args = [
+                "--db_path",
+                f"{expected_db_path}",
+                "--repo",
+                f"{expected_repo}",
+                "--gh_proxy",
+                f"{expected_gh_proxy}",
+                "--game_version",
+                "classic_wlk",
+                "--warcraft_base",
+                f"{expected_wow_base}",
+                "us",
+                "realm1",
+                "realm2",
+            ]
+            args = exporter_parse_args(raw_args)
+
+        self.assertEqual(args.db_path, expected_db_path)
+        self.assertEqual(args.repo, expected_repo)
+        self.assertEqual(args.gh_proxy, expected_gh_proxy)
+        self.assertEqual(args.game_version, GameVersionEnum.CLASSIC_WLK)
+        self.assertEqual(args.warcraft_base, expected_wow_base)
+        self.assertEqual(args.export_region, RegionEnum.US)
+        self.assertEqual(args.export_realms, {"realm1", "realm2"})
+
+    def test_update_and_export(self):
+        temp = TemporaryDirectory()
+        wow_folder = "_classic_era_"
+        db_path = f"{temp.name}/db"
+        with temp:
+            wow_base = f"{temp.name}/wow"
+            ensure_path(f"{wow_base}/{wow_folder}")
+            lua_path = (
+                f"{wow_base}/{wow_folder}/Interface/AddOns/"
+                "TradeSkillMaster_AppHelper/AppData.lua"
+            )
+
+            raw_args = [
+                "--db_path",
+                f"{db_path}",
+                "--game_version",
+                "classic",
+                "us",
+            ]
+            args = updater_parse_args(raw_args)
+            bn_api = DummyAPIWrapper()
+            updater_main(**vars(args), bn_api=bn_api)
+
+            raw_args = [
+                "--db_path",
+                f"{db_path}",
+                "--game_version",
+                "classic",
+                "--warcraft_base",
+                f"{wow_base}",
+                "us",
+                "realm11",
+                "realm12",
+            ]
+            args = exporter_parse_args(raw_args)
+            exporter_main(**vars(args))
+            with open(lua_path) as f:
+                content = f.read()
+
+            expected_occurances = [
+                ("AUCTIONDB_REGION_STAT", 1),
+                ("AUCTIONDB_REGION_HISTORICAL", 1),
+                ("Classic-US", 2),
+                ("Hardcore-US", 0),
+                ("AUCTIONDB_REGION_COMMODITY", 0),
+                # (horde, alliance) x (realm11, realm12)
+                ("AUCTIONDB_REALM_HISTORICAL", 4),
+                ("AUCTIONDB_REALM_SCAN_STAT", 4),
+                ("AUCTIONDB_REALM_DATA", 4),
+            ]
+            for expected, count in expected_occurances:
+                self.assertEqual(content.count(expected), count)
+
+    def test_update_and_export_hc(self):
+        temp = TemporaryDirectory()
+        wow_folder = "_classic_era_"
+        db_path = f"{temp.name}/db"
+        with temp:
+            wow_base = f"{temp.name}/wow"
+            ensure_path(f"{wow_base}/{wow_folder}")
+            lua_path = (
+                f"{wow_base}/{wow_folder}/Interface/AddOns/"
+                "TradeSkillMaster_AppHelper/AppData.lua"
+            )
+
+            raw_args = [
+                "--db_path",
+                f"{db_path}",
+                "--game_version",
+                "classic",
+                "us",
+            ]
+            args = updater_parse_args(raw_args)
+            bn_api = DummyAPIWrapper()
+            updater_main(**vars(args), bn_api=bn_api)
+
+            raw_args = [
+                "--db_path",
+                f"{db_path}",
+                "--game_version",
+                "classic",
+                "--warcraft_base",
+                f"{wow_base}",
+                "us",
+                "realm21",
+                "realm22",
+            ]
+            args = exporter_parse_args(raw_args)
+            exporter_main(**vars(args))
+            with open(lua_path) as f:
+                content = f.read()
+
+            expected_occurances = [
+                ("AUCTIONDB_REGION_STAT", 1),
+                ("AUCTIONDB_REGION_HISTORICAL", 1),
+                ("Classic-US", 0),
+                ("HC-US", 2),
+                ("AUCTIONDB_REGION_COMMODITY", 0),
+                # (horde, alliance) x (realm11, realm12)
+                ("AUCTIONDB_REALM_HISTORICAL", 4),
+                ("AUCTIONDB_REALM_SCAN_STAT", 4),
+                ("AUCTIONDB_REALM_DATA", 4),
+            ]
+            for expected, count in expected_occurances:
+                self.assertEqual(content.count(expected), count)

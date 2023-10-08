@@ -14,9 +14,10 @@ from ah.models import (
     GameVersionEnum,
     DBTypeEnum,
     FactionEnum,
+    Meta,
 )
 from ah.storage import TextFile
-from ah.db import AuctionDB
+from ah.db import DBHelper, GithubFileForker
 from ah.api import GHAPI
 from ah.cache import Cache
 from ah import config
@@ -100,11 +101,18 @@ class TSMExporter:
     NUMERIC_SET = set("0123456789")
     TSM_VERSION = 41200
     MOCK_WARCRAFT_BASE = "fake_warcraft_base"
+    TSM_HC_LABEL = "HC"
     _logger = logging.getLogger("TSMExporter")
 
-    def __init__(self, db: AuctionDB, export_file: TextFile) -> None:
-        self.db = db
+    def __init__(
+        self,
+        db_helper: DBHelper,
+        export_file: TextFile,
+        forker: GithubFileForker = None,
+    ) -> None:
+        self.db_helper = db_helper
         self.export_file = export_file
+        self.forker = forker
 
     @classmethod
     def get_tsm_appdata_path(
@@ -239,7 +247,7 @@ class TSMExporter:
             fields=fields_str,
             data=",".join(items_data),
         )
-        with file.open("a", newline="\n", encoding="utf-8") as f:
+        with file.open("a", encoding="utf-8") as f:
             f.write(text_out + "\n")
 
     def export_region(
@@ -247,33 +255,38 @@ class TSMExporter:
         namespace: Namespace,
         export_realms: Set[str],
     ):
-        meta_file = self.db.get_file(namespace, DBTypeEnum.META)
-        meta = self.db.load_meta(meta_file)
+        meta_file = self.db_helper.get_file(namespace, DBTypeEnum.META)
+        if self.forker:
+            meta_file.remove()
+        meta = Meta.from_file(meta_file, forker=self.forker)
         if not meta:
             raise ValueError(f"meta file {meta_file} not found or Empty.")
-        ts_update_start = meta["update"]["start_ts"]
-        ts_update_end = meta["update"]["end_ts"]
-        map_crid_connected_realms = meta["connected_realms"]
+        ts_update_start, ts_update_end = meta.get_update_ts()
 
-        # makes sure realm names are all valid
-        all_realms = {
-            realm
-            for connected_realms in map_crid_connected_realms.values()
-            for realm in connected_realms
-        }
+        all_realms = set(meta.get_connected_realm_names())
         if not export_realms <= all_realms:
             raise ValueError(f"unavailable realms : {export_realms - all_realms}. ")
 
+        # determines if we need to export hc / non-hc reagional data
+        is_exp_regional_hc = is_exp_regional_non_hc = False
+        # collect all auction data (non-hc) under this region
         region_auctions_commodities_data = MapItemStringMarketValueRecords()
+        # only hc auction data under this region, prices will be vastly different
+        region_auctions_data_hc = MapItemStringMarketValueRecords()
 
         if namespace.game_version == GameVersionEnum.RETAIL:
-            commodity_file = self.db.get_file(namespace, DBTypeEnum.COMMODITIES)
-            commodity_data = self.db.load_db(commodity_file)
+            commodity_file = self.db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
+            if self.forker:
+                commodity_file.remove()
+            commodity_data = MapItemStringMarketValueRecords.from_file(
+                commodity_file, forker=self.forker
+            )
         else:
             commodity_file = None
             commodity_data = None
 
         if commodity_data:
+            # HC doesn't have commodities
             region_auctions_commodities_data.extend(commodity_data)
             self.export_append_data(
                 self.export_file,
@@ -290,26 +303,38 @@ class TSMExporter:
         else:
             factions = [FactionEnum.ALLIANCE, FactionEnum.HORDE]
 
-        for crid, connected_realms in map_crid_connected_realms.items():
-            crid = int(crid)
-            connected_realms = set(connected_realms)
+        for crid, connected_realms, is_hc in meta.iter_connected_realms():
             # find all realm names we want to export under this connected realm,
             # they share the same auction data
             sub_export_realms = export_realms & connected_realms
 
             for faction in factions:
-                db_file = self.db.get_file(
+                db_file = self.db_helper.get_file(
                     namespace,
                     DBTypeEnum.AUCTIONS,
                     crid=crid,
                     faction=faction,
                 )
-                auction_data = self.db.load_db(db_file)
+                if self.forker:
+                    db_file.remove()
+                auction_data = MapItemStringMarketValueRecords.from_file(
+                    db_file, forker=self.forker
+                )
                 if not auction_data:
                     self._logger.warning(f"no data in {db_file}.")
                     continue
 
-                region_auctions_commodities_data.extend(auction_data)
+                if is_hc:
+                    region_auctions_data_hc.extend(auction_data)
+                else:
+                    region_auctions_commodities_data.extend(auction_data)
+
+                if not sub_export_realms:
+                    continue
+                else:
+                    is_exp_regional_hc = is_exp_regional_hc or is_hc
+                    is_exp_regional_non_hc = is_exp_regional_non_hc or not is_hc
+
                 if commodity_data:
                     realm_auctions_commodities_data = MapItemStringMarketValueRecords()
                     realm_auctions_commodities_data.extend(commodity_data)
@@ -343,15 +368,31 @@ class TSMExporter:
                             ts_update_end,
                         )
 
-        if region_auctions_commodities_data:
-            for region_export in self.REGION_AUCTIONS_COMMODITIES_EXPORTS:
-                region = namespace.region.upper()
-                tsm_game_version = namespace.game_version.get_tsm_game_version()
-                if tsm_game_version:
-                    tsm_region = f"{tsm_game_version}-{region}"
-                else:
-                    tsm_region = region
+        for data, is_hc_ in zip(
+            [region_auctions_commodities_data, region_auctions_data_hc], [False, True]
+        ):
+            if not data:
+                continue
 
+            if is_hc_ and not is_exp_regional_hc:
+                continue
+
+            if not is_hc_ and not is_exp_regional_non_hc:
+                continue
+
+            region = namespace.region.upper()
+            tsm_game_version = (
+                self.TSM_HC_LABEL
+                if is_hc_
+                else namespace.game_version.get_tsm_game_version()
+            )
+            if tsm_game_version:
+                tsm_region = f"{tsm_game_version}-{region}"
+            else:
+                # retail = None
+                tsm_region = region
+
+            for region_export in self.REGION_AUCTIONS_COMMODITIES_EXPORTS:
                 self.export_append_data(
                     self.export_file,
                     region_auctions_commodities_data,
@@ -366,9 +407,7 @@ class TSMExporter:
 
     @classmethod
     def export_append_app_info(cls, file: TextFile, version: int, ts_last_sync: int):
-        # mine windows uses cp936, let's be more explicit here
-        # https://docs.python.org/3.10/library/functions.html#open
-        with file.open("a", newline="\n", encoding="utf-8") as f:
+        with file.open("a", encoding="utf-8") as f:
             text_out = cls.TEMPLATE_APPDATA.format(
                 version=version,
                 last_sync=ts_last_sync,
@@ -389,29 +428,21 @@ def main(
     gh_api: GHAPI = None,
 ):
     if repo:
-        mode = AuctionDB.MODE_REMOTE_R
         cache = cache or Cache(config.DEFAULT_CACHE_PATH)
         gh_api = gh_api or GHAPI(cache, gh_proxy=gh_proxy)
+        forker = GithubFileForker(db_path, repo, gh_api)
     else:
-        mode = AuctionDB.MODE_LOCAL_RW
+        forker = None
 
+    db_helper = DBHelper(db_path)
     export_path = TSMExporter.get_tsm_appdata_path(warcraft_base, game_version)
-    db = AuctionDB(
-        db_path,
-        config.MARKET_VALUE_RECORD_EXPIRES,
-        config.DEFAULT_DB_COMPRESS,
-        mode,
-        repo,
-        gh_api,
-    )
-
     namespace = Namespace(
         category=NameSpaceCategoriesEnum.DYNAMIC,
         game_version=game_version,
         region=export_region,
     )
     export_file = TextFile(export_path)
-    exporter = TSMExporter(db, export_file)
+    exporter = TSMExporter(db_helper, export_file, forker=forker)
     exporter.export_file.remove()
     exporter.export_region(namespace, export_realms)
 
@@ -474,7 +505,7 @@ def parse_args(raw_args):
     )
     args = parser.parse_args(raw_args)
 
-    if args.repo and not AuctionDB.validate_repo(args.repo):
+    if args.repo and not GithubFileForker.validate_repo(args.repo):
         raise ValueError(
             f"Invalid Github repo given by '--repo' option, "
             f"it should be a valid Github repo URL, not {args.repo!r}."
