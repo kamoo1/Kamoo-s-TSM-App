@@ -4,8 +4,6 @@ import argparse
 import time
 from logging import getLogger
 from typing import Optional, Tuple
-import platform
-import psutil
 import re
 
 from ah.api import BNAPI, GHAPI
@@ -27,6 +25,7 @@ from ah.storage import BinaryFile
 from ah.db import DBHelper, GithubFileForker
 from ah import config
 from ah.cache import Cache
+from ah.sysinfo import SysInfo
 
 
 class Updater:
@@ -180,20 +179,15 @@ class Updater:
         return meta
 
     def update_region(self, namespace: Namespace) -> None:
+        sys_info = SysInfo()
+        sys_info.begin_monitor()
         meta = self.update_region_meta(namespace)
         start_ts, end_ts = self.update_region_records(
             namespace, meta.get_connected_realm_ids()
         )
         meta.set_update_ts(start_ts, end_ts)
-        data_sys = {
-            "platform": platform.platform(),
-            "python_version": platform.python_version(),
-            "cpu_count": psutil.cpu_count(),
-            "load_avg": psutil.getloadavg(),
-            "memory_percent": psutil.virtual_memory().percent,
-            "memory_total": psutil.virtual_memory().total,
-        }
-        meta.set_system(data_sys)
+        sys_info.stop_monitor()
+        meta.set_system(sys_info.get_sysinfo())
         meta_file = self.db_helper.get_file(namespace, DBTypeEnum.META)
         meta.to_file(meta_file)
 
