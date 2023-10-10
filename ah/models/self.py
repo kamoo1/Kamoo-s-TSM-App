@@ -1299,6 +1299,38 @@ class Meta:
         data["connected_realms"] = {
             int(k): v for k, v in data["connected_realms"].items()
         }
+
+        """
+        support old format, convert it to new format
+        we should remove this after old format is no longer in use
+
+        old format:
+        >>> connected_realms = {
+                $str_id: [
+                    "name",
+                    "name",
+                    ...
+                ]
+            }
+
+        """
+        for crid, crs in data["connected_realms"].items():
+            if crs and isinstance(crs[0], dict):
+                break
+
+            data["connected_realms"][crid] = [
+                {
+                    "name": realm,
+                    "id": None,
+                    "slug": None,
+                    # we just assume all realms are non-hardcore
+                    # this will cause hardcore realms data not being
+                    # displayed in game
+                    "is_hardcore": False,
+                }
+                for realm in crs
+            ]
+
         meta = cls(data=data)
         cls._logger.info(f"{file} loaded.")
         return meta

@@ -384,4 +384,69 @@ class TestModels(TestCase):
             with open(meta_path, "r") as f:
                 actual_meta_data = json.load(f)
 
-            self.assertEqual(actual_meta_data, expected_meta_data)
+            self.assertDictEqual(actual_meta_data, expected_meta_data)
+
+    def test_meta_old_format_convert(self):
+        old_meta_data = {
+            "update": {
+                "start_ts": 1,
+                "end_ts": 2,
+                "duration": 1,
+            },
+            "connected_realms": {
+                "1": [
+                    "name1",
+                    "name2",
+                ],
+            },
+            "system": {},
+        }
+
+        # expected meta data after conversion
+        expected_meta_data = {
+            "update": {
+                "start_ts": 1,
+                "end_ts": 2,
+                "duration": 1,
+            },
+            "connected_realms": {
+                "1": [
+                    {
+                        "name": "name1",
+                        "id": None,
+                        "slug": None,
+                        "is_hardcore": False,
+                    },
+                    {
+                        "name": "name2",
+                        "id": None,
+                        "slug": None,
+                        "is_hardcore": False,
+                    },
+                ],
+            },
+            "system": {},
+        }
+        temp = TemporaryDirectory()
+        with temp:
+            path = temp.name
+            helper = DBHelper(path)
+            namespace = Namespace(
+                category=NameSpaceCategoriesEnum.DYNAMIC,
+                game_version=GameVersionEnum.CLASSIC,
+                region=RegionEnum.US,
+            )
+            meta_file = helper.get_file(namespace, DBTypeEnum.META)
+            meta_path = meta_file.file_path
+            with open(meta_path, "w") as f:
+                json.dump(old_meta_data, f)
+
+            # load old meta data, convert and save
+            meta = Meta.from_file(meta_file)
+            meta.to_file(meta_file)
+
+            # load actual meta data, should be converted
+            with open(meta_path, "r") as f:
+                actual_meta_data = json.load(f)
+
+            self.assertDictEqual(actual_meta_data, expected_meta_data)
