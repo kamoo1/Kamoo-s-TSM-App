@@ -220,7 +220,6 @@ def main(
 ):
     cache = cache or Cache(config.DEFAULT_CACHE_PATH)
 
-    # W (write) is nessary since we are updating
     if repo:
         gh_api = gh_api or GHAPI(cache, gh_proxy)
         forker = GithubFileForker(db_path, repo, gh_api)
