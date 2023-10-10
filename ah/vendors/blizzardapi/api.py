@@ -3,6 +3,7 @@ import requests
 
 from ah import config
 
+
 class Api:
     """Base API class.
 
