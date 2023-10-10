@@ -6,6 +6,8 @@ from logging import getLogger
 from typing import Optional, Tuple
 import re
 
+from requests.exceptions import HTTPError
+
 from ah.api import BNAPI, GHAPI
 from ah.models import (
     AuctionsResponse,
@@ -51,37 +53,53 @@ class Updater:
         """pull lastest auction increment from api, if `connected_realm_id`
         not given, then pull commodities (retail commodities are region-wide).
 
-        TODO: Maybe only catch requests & pydantic errors?
-        NOTE: some of the connected realms listed in connected realms index,
-              but can't fetch details, errors expected:
-              (tw vanilla) 5299 5301
-              (tw wlk)     5744
+        NOTE: failed to fetch auctions for some connected realms,
+              due to `auctions` field being `None` or a 404 status code.
+
+              we will return a falsy increment in case of `auctions` field being `None`,
+              or returning `None` when 404. together with warning log message.
+
         """
         if connected_realm_id:
             try:
                 resp = AuctionsResponse.from_api(
                     self.bn_api, namespace, connected_realm_id, faction=faction
                 )
-            except Exception:
+            except HTTPError as e:
                 self._logger.warning(
-                    "Failed to request auctions for "
-                    f"{namespace!r} {connected_realm_id} {faction!s}",
-                    exc_info=True,
+                    "Failed to request auctions for: "
+                    f"{namespace!r} {connected_realm_id} {faction!s}. "
+                    f"Error message: {e!s}"
                 )
+                self._logger.debug("traceback:", exc_info=True)
                 return
+
+            if not resp.get_auctions():
+                self._logger.warning(
+                    "Requested auction was empty: "
+                    f"{namespace!r} {connected_realm_id} {faction!s}",
+                )
+
         else:
             try:
                 resp = CommoditiesResponse.from_api(self.bn_api, namespace)
-            except Exception:
+            except HTTPError as e:
                 self._logger.warning(
-                    f"Failed to request commodities for {namespace!r}",
-                    exc_info=True,
+                    f"Failed to request commodities for: {namespace=!r}. "
+                    f"Error message: {e!s}"
                 )
+                self._logger.debug("traceback:", exc_info=True)
                 return
+
+            if not resp.get_auctions():
+                self._logger.warning(
+                    f"Requested commodities was empty: {namespace!r}",
+                )
 
         increment = MapItemStringMarketValueRecord.from_response(
             resp, namespace.game_version
         )
+
         return increment
 
     def save_increment(
@@ -146,7 +164,7 @@ class Updater:
         end_ts = int(time.time()) + 1
         return start_ts, end_ts
 
-    def update_region_meta(self, namespace: Namespace) -> Meta:
+    def pull_region_meta(self, namespace: Namespace) -> Meta:
         """get latest connected realm info for this region"""
         meta = Meta()
         crids = []
@@ -159,18 +177,15 @@ class Updater:
         for crid in crids:
             try:
                 connected_realm = ConnectedRealm.from_api(self.bn_api, namespace, crid)
-            except Exception as e:
+            except HTTPError as e:
                 """
-                TODO: Maybe only catch requests & pydantic errors?
-                NOTE: some connected realms listed in connected realms index,
-                      but can't fetch details:
-                      (tw vanilla) 5299
-                      (tw wlk)     5744
-                      subject to their changes, errors expected
+                NOTE: some of the connected realms fails with a 404 status code.
+
                 """
                 self._logger.warning(
-                    f"Failed to request connected realm data {crid=}, "
-                    f"error message: {e}"
+                    "Failed to request connected realm data for: "
+                    f"{namespace!r} {crid}. "
+                    f"Error message: {e!s}"
                 )
                 self._logger.debug("traceback:", exc_info=True)
             else:
@@ -181,7 +196,7 @@ class Updater:
     def update_region(self, namespace: Namespace) -> None:
         sys_info = SysInfo()
         sys_info.begin_monitor()
-        meta = self.update_region_meta(namespace)
+        meta = self.pull_region_meta(namespace)
         start_ts, end_ts = self.update_region_records(
             namespace, meta.get_connected_realm_ids()
         )

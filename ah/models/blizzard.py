@@ -41,6 +41,12 @@ __all__ = (
     "ConnectedRealm",
 )
 
+"""
+Pydantic fields specs:
+https://docs.pydantic.dev/latest/migration/#required-optional-and-nullable-fields
+
+"""
+
 
 class FactionEnum(StrEnum_):
     ALLIANCE = "a"
@@ -318,7 +324,7 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
         }
     """
 
-    auctions: List[Auction]
+    auctions: List[Auction] = Field(default_factory=list)
     timestamp: int = Field(default_factory=lambda: int(time.time()))
 
     # don't care, `Any` implies optional field
@@ -423,16 +429,14 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
 
     # we don't care about _links
     links: Any = Field(alias="_links")
-    auctions: List[Commodity]
+    auctions: List[Commodity] = Field(default_factory=list)
     timestamp: int = Field(default_factory=lambda: int(time.time()))
 
     def get_auctions(self) -> List[GenericAuctionInterface]:
         return self.auctions
 
     @classmethod
-    def from_api(
-        cls, bn_api: BNAPI, namespace: Namespace
-    ) -> "CommoditiesResponse":
+    def from_api(cls, bn_api: BNAPI, namespace: Namespace) -> "CommoditiesResponse":
         resp = bn_api.get_commodities(namespace)
         return cls.parse_obj(resp)
 

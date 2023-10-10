@@ -34,7 +34,7 @@ class TestModels(TestCase):
 
         n_sample = int(MapItemStringMarketValueRecord.SAMPLE_HI * quantity)
         n_not_sample = quantity - n_sample
-        print(n_sample, n_not_sample)
+        # print(n_sample, n_not_sample)
         if n_sample % 2 == 1:
             should_append_avg_price = True
         else:
@@ -82,7 +82,7 @@ class TestModels(TestCase):
             group, min_price = cls.get_auction_param(
                 quantity, target_price, game_version=game_version
             )
-            print(group)
+            # print(group)
             for price, quantity in group:
                 if type_ == "auction":
                     auction = Auction(
@@ -152,8 +152,7 @@ class TestModels(TestCase):
             self.assertEqual(record.min_buyout, min_price)
 
     def test_increment_classic(self):
-        """classic auction response's "buyout" and "bid" are total price.
-        """
+        """classic auction response's "buyout" and "bid" are total price."""
         timestamp = 1000
         resp, expected, min_price = self.mock_response(
             "auction", 1, timestamp=timestamp, game_version=GameVersionEnum.CLASSIC
@@ -176,3 +175,20 @@ class TestModels(TestCase):
             self.assertEqual(record.market_value, expected[item_id][0])
             self.assertEqual(record.num_auctions, expected[item_id][1])
             self.assertEqual(record.min_buyout, min_price)
+
+    def test_edge(self):
+        obj = {
+            "_links": {},
+            "connected_realm": {},
+            "commodities": {},
+            "timestamp": 100,
+        }
+        resp = AuctionsResponse.parse_obj(obj)
+        self.assertEqual(resp.get_auctions(), [])
+
+        obj = {
+            "_links": {},
+            "timestamp": 100,
+        }
+        resp = CommoditiesResponse.parse_obj(obj)
+        self.assertEqual(resp.get_auctions(), [])

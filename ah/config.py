@@ -14,3 +14,5 @@ DEFAULT_DB_COMPRESS = True
 # how often to take a snapshot of the system memory / cpu usage
 DEFAULT_SNAPSHOT_INTERVAL = 10
 MAX_SNAPSHOTS = 100
+# /data/wow/connected-realm/index randomly encounters SSL errors
+VERIFY_SSL = False
