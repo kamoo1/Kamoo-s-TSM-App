@@ -1,21 +1,24 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
 name: AH Update
 
 on:
   workflow_dispatch:
   schedule:
-    # 8 times a day
-    - cron: '0 */3 * * *'
+  # 8 times a day
+  - cron: '0 */3 * * *'
 
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    with:
+      upload-coverage: false
+
   ah_update:
     runs-on: ubuntu-latest
     environment: env_main
     permissions:
       contents: write
+    needs: test
     steps:
     # checkout 'latest' tag
     - uses: actions/checkout@v3
@@ -29,11 +32,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install coverage
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Test with unittest
-      run: |
-        python -m unittest discover -vfs tests
     - name: Set up environment variables
       run: |
         echo "JOB_START_TS=$(date +%s)" >> $GITHUB_ENV
@@ -50,16 +49,16 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-ah-
     - name: Run AH Update
-      env: 
+      env:
         BN_CLIENT_ID: ${{ secrets.BN_CLIENT_ID }}
         BN_CLIENT_SECRET: ${{ secrets.BN_CLIENT_SECRET }}
-      run: >
-        printf %s\\n retail tw classic tw classic_wlk tw 
-        retail kr classic kr classic_wlk kr | 
-        xargs -n2 
-        python -m ah.updater 
-        --db_path ${{ env.DB_PATH }} 
-        --game_version 
+      run: "printf %s\\\\n classic tw | xargs -n2  python -m ah.updater  --db_path ${{ env.DB_PATH }}  --game_version \n"
+    # - name: Update db tag
+    #   run: |
+    #     git tag -d db || true
+    #     git push origin :db || true
+    #     git tag db
+    #     git push origin db
     - name: Release DB
       uses: softprops/action-gh-release@v1
       with:
