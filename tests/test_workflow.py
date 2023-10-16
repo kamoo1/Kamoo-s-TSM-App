@@ -172,7 +172,7 @@ class TestWorkflow(TestCase):
         db_helper = DBHelper(temp_path)
         updater = Updater(DummyAPIWrapper(), db_helper, forker=None)
         file = db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
-        resp = CommoditiesResponse.parse_obj(
+        resp = CommoditiesResponse.model_validate(
             self.mock_request_commodities_single_item(item_id, price_groups)
         )
         timestamp = resp.timestamp
@@ -246,7 +246,7 @@ class TestWorkflow(TestCase):
             item_count = 100
             test_data = {str(id): randint(1000, 4000) for id in range(0, item_count)}
             test_resp = self.mock_request_commodities_multiple_items(test_data)
-            test_resp = CommoditiesResponse.parse_obj(test_resp)
+            test_resp = CommoditiesResponse.model_validate(test_resp)
             """
             >>> test_resp = [
                 {

@@ -29,6 +29,7 @@ class GithubFileForker:
     REPO_MATCHER = re.compile(
         r"^(:?https://)?github.com/(?P<user>[^/]+)/(?P<repo>[^/]+).*$"
     )
+    TAG_DB_RELEASE = config.TAG_DB_RELEASE
 
     def __init__(
         self,
@@ -57,7 +58,7 @@ class GithubFileForker:
             raise ValueError(f"Invalid fork_repo: {self._fork_repo}")
         user = m.group("user")
         repo = m.group("repo")
-        assets = self._gh_api.get_assets_uri(user, repo)
+        assets = self._gh_api.get_assets_uri(user, repo, tag=self.TAG_DB_RELEASE)
         return assets
 
     def _pull_asset(self, url) -> bytes:

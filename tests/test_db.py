@@ -71,7 +71,7 @@ class DummyGHAPI:
         self.db_bytes = db.to_protobuf_bytes()
         self.db_bytes = gzip.compress(self.db_bytes)
 
-    def get_assets_uri(self, owner, repo):
+    def get_assets_uri(self, owner, repo, tag=None):
         ret = {}
         namespace = Namespace(
             category=self.category,

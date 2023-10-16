@@ -13,7 +13,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from pydantic import Field, root_validator, Extra
+from pydantic import model_validator, ConfigDict, Field
 
 from ah.models.base import _BaseModel, StrEnum_
 
@@ -43,6 +43,9 @@ __all__ = (
 
 """
 Pydantic fields specs:
+https://docs.pydantic.dev/latest/migration/#required-optional-and-nullable-fields
+
+As of 2.x pydantic, `Any` no longer have a implicit default value of `None`.
 https://docs.pydantic.dev/latest/migration/#required-optional-and-nullable-fields
 
 """
@@ -137,8 +140,7 @@ class Namespace(_BaseModel):
     def __repr__(self) -> str:
         return f'"{self}"'
 
-    class Config(_BaseModel.Config):
-        frozen = True
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
 
 class TimeLeft(StrEnum_):
@@ -245,7 +247,8 @@ class AuctionItem(GenericItemInterface, _BaseModel):
     seed: Optional[int] = None
     rand: Optional[int] = None
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def check_pet_fields(cls, values):
         pet_fields = ["pet_breed_id", "pet_level", "pet_quality_id", "pet_species_id"]
         if any(values.get(f) for f in pet_fields):
@@ -279,7 +282,8 @@ class Auction(GenericAuctionInterface, _BaseModel):
     quantity: int
     time_left: TimeLeft
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def check_bid_buyout(cls, values):
         if values.get("bid") is None and values.get("buyout") is None:
             raise ValueError("At least one of 'bid' and 'buyout' needs to be present")
@@ -328,13 +332,13 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
     timestamp: int = Field(default_factory=lambda: int(time.time()))
 
     # don't care, `Any` implies optional field
-    commodities: Any
-    links: Any = Field(alias="_links")
-    connected_realm: Any
+    commodities: Any = None
+    links: Any = Field(None, alias="_links")
+    connected_realm: Any = None
 
     # NOTE: these fields are part of classic & classic wlk, but not retail
-    id: Any
-    name: Any
+    id: Any = None
+    name: Any = None
 
     MAP_FACTION_AH_ID: ClassVar[Dict[FactionEnum, int]] = {
         FactionEnum.ALLIANCE: 2,
@@ -363,7 +367,7 @@ class AuctionsResponse(GenericAuctionsResponseInterface, _BaseModel):
             connected_realm_id,
             auction_house_id=auction_house_id,
         )
-        return cls.parse_obj(resp)
+        return cls.model_validate(resp)
 
 
 class CommodityItem(GenericItemInterface, _BaseModel):
@@ -428,7 +432,7 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
     """
 
     # we don't care about _links
-    links: Any = Field(alias="_links")
+    links: Any = Field(None, alias="_links")
     auctions: List[Commodity] = Field(default_factory=list)
     timestamp: int = Field(default_factory=lambda: int(time.time()))
 
@@ -438,7 +442,7 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
     @classmethod
     def from_api(cls, bn_api: BNAPI, namespace: Namespace) -> "CommoditiesResponse":
         resp = bn_api.get_commodities(namespace)
-        return cls.parse_obj(resp)
+        return cls.model_validate(resp)
 
     def get_timestamp(self) -> int:
         return self.timestamp
@@ -446,18 +450,18 @@ class CommoditiesResponse(GenericAuctionsResponseInterface, _BaseModel):
 
 class Realm(_BaseModel):
     id: int
-    region: Any
-    connected_realm: Any
+    region: Any = None
+    connected_realm: Any = None
     name: str
     category: str
     locale: str
     # TODO: use tz type?
     timezone: str
-    type: Any
+    type: Any = None
     is_tournament: bool
     slug: str
     # wow/realm response has this field, but not connected realm response
-    links: Optional[Any] = Field(alias="_links")
+    links: Optional[Any] = Field(None, alias="_links")
 
     CATE_HARDCORE: ClassVar[str] = "Hardcore"
 
@@ -478,8 +482,6 @@ class ConnectedRealm(_BaseModel):
         connected_realm_id: int,
     ) -> "ConnectedRealm":
         resp = bn_api.get_connected_realm(namespace, connected_realm_id)
-        return cls.parse_obj(resp)
+        return cls.model_validate(resp)
 
-    class Config:
-        # there are just too many fields we don't care about
-        extra = Extra.ignore
+    model_config = ConfigDict(extra="ignore")

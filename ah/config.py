@@ -16,3 +16,8 @@ DEFAULT_SNAPSHOT_INTERVAL = 10
 MAX_SNAPSHOTS = 100
 # /data/wow/connected-realm/index randomly encounters SSL errors
 VERIFY_SSL = False
+# of which tag the database files are released
+TAG_DB_RELEASE = "latest"
+# what is the archive name in the build release,
+# should be the same in `dist_glob_patterns` in `pyproject.toml`
+RELEASED_ARCHIVE_NAME = "archive.zip"

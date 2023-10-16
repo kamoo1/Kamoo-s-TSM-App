@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 from typing import (
     Tuple,
     List,
@@ -56,7 +57,7 @@ from ah.models.blizzard import (
     Namespace,
     NameSpaceCategoriesEnum,
 )
-from ah.api import GHAPI, BNAPI
+from ah.api import GHAPI, BNAPI, UpdateEnum
 from ah.fs import remove_path
 from ah.patcher import main as patcher_main
 
@@ -555,6 +556,7 @@ class Window(QMainWindow, Ui_MainWindow):
         # the result from the first trigger may override the second.
         self.post_setting_load_setup()
         self.on_exporter_dropdown_change()
+        self.on_check_update()
 
     def closeEvent(self, event) -> None:
         self.save_settings()
@@ -853,6 +855,65 @@ class Window(QMainWindow, Ui_MainWindow):
         self.comboBox_exporter_game_version.currentTextChanged.connect(
             self.on_exporter_dropdown_change
         )
+
+    def on_check_update(self) -> None:
+        # check version
+        gh_api = self.get_gh_api()
+        repo = self.get_repo()
+        m = GithubFileForker.validate_repo(repo)
+        user, repo = m.group("user"), m.group("repo")
+        update_stat, version = gh_api.check_update(user, repo)
+
+        if update_stat == UpdateEnum.NONE:
+            return
+
+        elif update_stat == UpdateEnum.OPTIONAL:
+            # pop up message box (update now or later)
+            msg = _t(
+                "MainWindow",
+                "Update to version {!s} available, do you want to download now?",
+            )
+            msg = msg.format(version)
+            reply = QMessageBox.question(
+                self,
+                _t("MainWindow", "Update Available"),
+                msg,
+                QMessageBox.Yes,
+                QMessageBox.No,
+            )
+
+        elif update_stat == UpdateEnum.REQUIRED:
+            # pop up message box (update needed)
+            msg = _t(
+                "MainWindow",
+                "Update to version {!s} required, current version is no longer "
+                "being supported. "
+                "Do you want to download now?",
+            )
+            msg = msg.format(version)
+            reply = QMessageBox.question(
+                self,
+                _t("MainWindow", "Update Required"),
+                msg,
+                QMessageBox.Yes,
+                QMessageBox.No,
+            )
+
+        if reply == QMessageBox.Yes:
+            cwd = os.getcwd()
+            path = os.path.join(cwd, f"ah-{version}.zip")
+            self.hide()
+            content = gh_api.get_build_release(user, repo, version)
+            with open(path, "wb") as f:
+                f.write(content)
+
+            # open zip
+            self.browse(path)
+            # exit
+            sys.exit(0)
+
+        elif update_stat == UpdateEnum.REQUIRED:
+            sys.exit(0)
 
     def on_log_recieved(self, msg: str) -> None:
         # StackOverflow

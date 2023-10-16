@@ -363,7 +363,7 @@ class TestModels(TestCase):
                     }
                 ],
             }
-            cr = ConnectedRealm.parse_obj(cr_resp)
+            cr = ConnectedRealm.model_validate(cr_resp)
             meta.add_connected_realm(100, cr)
             meta.to_file(meta_file)
 

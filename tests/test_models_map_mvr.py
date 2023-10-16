@@ -118,14 +118,14 @@ class TestModels(TestCase):
                 "commodities": {},
                 "timestamp": timestamp,
             }
-            resp = AuctionsResponse.parse_obj(obj)
+            resp = AuctionsResponse.model_validate(obj)
         else:
             obj = {
                 "_links": {},
                 "auctions": auctions,
                 "timestamp": timestamp,
             }
-            resp = CommoditiesResponse.parse_obj(obj)
+            resp = CommoditiesResponse.model_validate(obj)
 
         return resp, expected, min_price
 
@@ -183,12 +183,12 @@ class TestModels(TestCase):
             "commodities": {},
             "timestamp": 100,
         }
-        resp = AuctionsResponse.parse_obj(obj)
+        resp = AuctionsResponse.model_validate(obj)
         self.assertEqual(resp.get_auctions(), [])
 
         obj = {
             "_links": {},
             "timestamp": 100,
         }
-        resp = CommoditiesResponse.parse_obj(obj)
+        resp = CommoditiesResponse.model_validate(obj)
         self.assertEqual(resp.get_auctions(), [])

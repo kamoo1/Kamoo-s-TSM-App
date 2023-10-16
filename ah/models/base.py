@@ -2,7 +2,7 @@ import sys
 from typing import ClassVar, Generic, Iterator, TypeVar, Callable, Type, Any
 from logging import getLogger, Logger
 
-from pydantic import BaseModel, Extra
+from pydantic import ConfigDict, BaseModel
 
 __all__ = (
     "_BaseModel",
@@ -92,18 +92,16 @@ class _BaseModel(BaseModel):
     def dict(self, *args, **kwargs):
         kwargs["exclude_none"] = kwargs.get("exclude_none", True)
         kwargs["by_alias"] = kwargs.get("by_alias", True)
-        return super().dict(*args, **kwargs)
+        return super().model_dump(*args, **kwargs)
 
     def json(self, *args, **kwargs):
         kwargs["exclude_none"] = kwargs.get("exclude_none", True)
         kwargs["by_alias"] = kwargs.get("by_alias", True)
-        return super().json(*args, **kwargs, exclude_none=True, by_alias=True)
+        return super().model_dump_json(
+            *args, **kwargs, exclude_none=True, by_alias=True
+        )
 
-    class Config:
-        extra = Extra.forbid
-        # this makes pydantic use the enum value instead of the enum
-        # TODO: test dumping them actually serializes the value
-        # use_enum_values = True
+    model_config = ConfigDict(extra="forbid")
 
 
 class _RootListMixin(Generic[_VT]):
