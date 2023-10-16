@@ -52,13 +52,13 @@ jobs:
       env:
         BN_CLIENT_ID: ${{ secrets.BN_CLIENT_ID }}
         BN_CLIENT_SECRET: ${{ secrets.BN_CLIENT_SECRET }}
-      run: "printf %s\\\\n classic tw | xargs -n2  python -m ah.updater  --db_path ${{ env.DB_PATH }}  --game_version \n"
-    # - name: Update db tag
-    #   run: |
-    #     git tag -d db || true
-    #     git push origin :db || true
-    #     git tag db
-    #     git push origin db
+      run: >
+        printf %s\\n retail tw classic tw classic_wlk tw 
+        retail kr classic kr classic_wlk kr | 
+        xargs -n2 
+        python -m ah.updater 
+        --db_path ${{ env.DB_PATH }} 
+        --game_version 
     - name: Release DB
       uses: softprops/action-gh-release@v1
       with:
