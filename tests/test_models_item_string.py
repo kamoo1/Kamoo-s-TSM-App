@@ -191,7 +191,7 @@ class TestModels(TestCase):
             {"type": 40, "value": 856},
             {"type": 42, "value": 48},
         ]
-        ret = "i:201937::i337"
+        ret = "i:201937::i340"
         i = ItemString.from_auction_item(
             AuctionItem(
                 id=201937,

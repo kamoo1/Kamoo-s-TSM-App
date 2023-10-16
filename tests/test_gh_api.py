@@ -67,12 +67,10 @@ class MockSession(Mock):
 
 class TestGHApi(TestCase):
     def setUp(self) -> None:
-        print("setup")
         self.patcher = patch("requests.Session", MockSession)
         self.patcher.start()
 
     def tearDown(self) -> None:
-        print("teardown")
         self.patcher.stop()
 
     def test_update(self):
