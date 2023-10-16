@@ -88,6 +88,7 @@ class LocaleHelper:
                 pass
 
     def get_default_name(self) -> str | None:
+        # NOTE: env var `LANG` take precedence over system locale
         system_code = QLocale.system().name()
         if system_code in self.map_code_name:
             return self.map_code_name[system_code]

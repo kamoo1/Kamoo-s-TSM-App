@@ -100,11 +100,12 @@ class GithubFileForker:
         if not file.exists():
             try:
                 self._fork_file(file)
-            except DownloadError:
+            except DownloadError as e:
                 self._logger.warning(
-                    f"Failed to download {file.file_name!r} from {self._fork_repo!r}",
-                    exc_info=True,
+                    f"Failed to download {file.file_name!r} from {self._fork_repo!r}. "
+                    f"Error message: {e!s}"
                 )
+                self._logger.debug("traceback:", exc_info=True)
 
 
 class DBHelper:
