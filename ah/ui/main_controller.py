@@ -886,7 +886,8 @@ class Window(QMainWindow, Ui_MainWindow):
             # pop up message box (update now or later)
             msg = _t(
                 "MainWindow",
-                "Update to version {!s} available, do you want to download now?",
+                "Update to version {!s} available, "
+                "do you want to download now?"  # fmt: skip
             )
             msg = msg.format(version)
             reply = QMessageBox.question(
@@ -903,7 +904,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 "MainWindow",
                 "Update to version {!s} required, current version is no longer "
                 "being supported. "
-                "Do you want to download now?",
+                "Do you want to download now?"  # fmt: skip
             )
             msg = msg.format(version)
             reply = QMessageBox.question(

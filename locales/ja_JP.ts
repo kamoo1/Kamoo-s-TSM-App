@@ -154,22 +154,22 @@
         <translation>ログ</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="287"/>
+        <location filename="../ah/ui/main_controller.py" line="279"/>
         <source>Invalid Warcraft Base Path</source>
         <translation>無効なWarcraftルートパス</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="303"/>
+        <location filename="../ah/ui/main_controller.py" line="295"/>
         <source>Invalid Github Repo</source>
         <translation>無効なGitHubリポジトリ</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="319"/>
+        <location filename="../ah/ui/main_controller.py" line="311"/>
         <source>Invalid Github Proxy</source>
         <translation>無効なGitHubプロキシ</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="339"/>
+        <location filename="../ah/ui/main_controller.py" line="331"/>
         <source>Invalid Input</source>
         <translation>無効な入力</translation>
     </message>
@@ -194,27 +194,27 @@
         <translation>Warcraftルートパスを選択</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1146"/>
+        <location filename="../ah/ui/main_controller.py" line="1195"/>
         <source>Config Error</source>
         <translation>設定エラー</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1051"/>
+        <location filename="../ah/ui/main_controller.py" line="1113"/>
         <source>Export Error</source>
         <translation>エクスポートエラー</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1100"/>
+        <location filename="../ah/ui/main_controller.py" line="1163"/>
         <source>Update Error</source>
         <translation>アップデートエラー</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1135"/>
+        <location filename="../ah/ui/main_controller.py" line="1184"/>
         <source>Patch TSM</source>
         <translation>TSMのパッチ適用</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="995"/>
+        <location filename="../ah/ui/main_controller.py" line="1057"/>
         <source>If you&apos;re exporting regions and realms not officially supported by TSM (like TW, KR, and some classic realms), it is recommended to patch TSM&apos;s &apos;LibRealmInfo&apos; library with the data of some newly added realms they&apos;re missing. 
 
 Missing these data can cause TSM misidentify the region of these realms, which can lead to problem loading auction data.
@@ -227,7 +227,7 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
 パッチをすぐに適用する場合は &apos;はい&apos; をクリックし、スキップする場合は &apos;いいえ&apos; をクリックできます（いつでも &apos;ツール&apos; タブの &apos;LibRealmInfoパッチ&apos; ボタンをクリックして後でパッチを適用できます）。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1135"/>
+        <location filename="../ah/ui/main_controller.py" line="1184"/>
         <source>Patched TSM successfully!</source>
         <translation>TSMは正常にパッチされました！</translation>
     </message>
@@ -262,7 +262,7 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
         <translation>言語 {!r} が見つかりません！</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1204"/>
+        <location filename="../ah/ui/main_controller.py" line="1253"/>
         <source>Invalid selected tab {!r} for function &apos;get_namespace&apos;</source>
         <translation>&apos;get_namespace&apos; 関数のために選択されたタブ {!r} は無効です。</translation>
     </message>
@@ -280,6 +280,26 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
         <location filename="../ah/ui/main_controller.py" line="725"/>
         <source>Battle.net client secret, will be saved under {!r}.</source>
         <translation>Battle.netクライアントの秘密情報、{!r} に保存されます。</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_controller.py" line="893"/>
+        <source>Update Available</source>
+        <translation>アップデートが利用可能です</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_controller.py" line="910"/>
+        <source>Update Required</source>
+        <translation>アップデートが必要です</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_controller.py" line="887"/>
+        <source>Update to version {!s} available, do you want to download now?</source>
+        <translation>バージョン {!s} へのアップデートが利用可能です。今すぐダウンロードしますか？</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_controller.py" line="903"/>
+        <source>Update to version {!s} required, current version is no longer being supported. Do you want to download now?</source>
+        <translation>バージョン {!s} へのアップデートが必要です。現在のバージョンはサポートされなくなりました。今すぐダウンロードしますか？</translation>
     </message>
 </context>
 </TS>
