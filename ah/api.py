@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 import requests
 from requests.adapters import HTTPAdapter, Retry
 from typing import Dict, Any, List, Tuple
@@ -75,14 +76,16 @@ class UpdateEnum(Enum):
 class GHAPI(BoundCacheMixin):
     REQUESTS_KWARGS = {"timeout": 10}
     RELEASED_ARCHIVE_NAME = config.RELEASED_ARCHIVE_NAME
+    logger = logging.getLogger("GHAPI")
 
     def __init__(self, cache: Cache, gh_proxy=None) -> None:
         self.gh_proxy = gh_proxy
         if self.gh_proxy and self.gh_proxy[-1] != "/":
             self.gh_proxy += "/"
         self.session = requests.Session()
+        # note: sometimes /tags returns 403
         retries = Retry(
-            total=5, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504]
+            total=5, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504, 403]
         )
         self.session.mount("https://", HTTPAdapter(max_retries=retries))
         self.session.mount("http://", HTTPAdapter(max_retries=retries))
@@ -114,6 +117,7 @@ class GHAPI(BoundCacheMixin):
         repo: str,
         tag: str = "latest",
     ) -> Dict[str, str]:
+        self.logger.info(f"Fetching assets list from release {tag!r}")
         url = f"https://api.github.com/repos/{user}/{repo}/releases/tags/{tag}"
         url = self.add_proxy(url)
         resp = self.session.get(
@@ -155,14 +159,17 @@ class GHAPI(BoundCacheMixin):
 
     @bound_cache(10 * SECONDS_IN.MIN)
     def get_asset(self, url: str) -> bytes:
+        name = urlparse(url).path.split("/")[-1]
+        self.logger.info(f"Downloading asset {name!r}")
         url = self.add_proxy(url)
         resp = self.session.get(url, **self.REQUESTS_KWARGS)
         if resp.status_code != 200:
-            raise ValueError("Failed to get releases, code: {resp.status_code}")
+            raise ValueError(f"Failed to get releases, code: {resp.status_code}")
         return resp.content
 
     @bound_cache(10 * SECONDS_IN.MIN)
     def get_tags(self, user: str, repo: str) -> List[str]:
+        self.logger.info(f"Fetching tags from {repo!r}")
         url = f"https://api.github.com/repos/{user}/{repo}/tags"
         url = self.add_proxy(url)
         resp = self.session.get(url, **self.REQUESTS_KWARGS)
@@ -204,7 +211,7 @@ class GHAPI(BoundCacheMixin):
 
         latest_version = self.get_latest_version(user, repo)
         if not latest_version or latest_version <= current_ver:
-            return UpdateEnum.NONE, None
+            return UpdateEnum.NONE, latest_version
 
         if latest_version.major > current_ver.major:
             return UpdateEnum.REQUIRED, latest_version

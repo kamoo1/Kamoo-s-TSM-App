@@ -114,7 +114,7 @@ class Updater:
         n_removed_records += records.compress(start_ts, self.RECORDS_EXPIRES_IN)
         records.to_file(file)
         self._logger.info(
-            f"DB update: {file.file_path!r}, {n_added_records=} "
+            f"DB update: {file!r}, {n_added_records=} "
             f"{n_added_entries=} {n_removed_records=}"
         )
         return records

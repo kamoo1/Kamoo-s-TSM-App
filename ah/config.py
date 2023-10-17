@@ -1,4 +1,5 @@
 import os
+import urllib3
 
 from ah.defs import SECONDS_IN
 from ah.fs import get_temp_path
@@ -16,6 +17,9 @@ DEFAULT_SNAPSHOT_INTERVAL = 10
 MAX_SNAPSHOTS = 100
 # /data/wow/connected-realm/index randomly encounters SSL errors
 VERIFY_SSL = False
+if not VERIFY_SSL:
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 # of which tag the database files are released
 TAG_DB_RELEASE = "latest"
 # what is the archive name in the build release,

@@ -68,21 +68,16 @@ class GithubFileForker:
         try:
             assets = self._pull_assets_url()
         except Exception as e:
-            raise DownloadError(
-                f"Failed to download asset map from {self._fork_repo!r}"
-            ) from e
+            raise DownloadError("Failed to download asset map") from e
 
         if file.file_name not in assets:
-            raise DownloadError(f"File not listed in assets: {file.file_name!r}")
+            raise DownloadError("File not listed in assets")
 
         asset_url = assets[file.file_name]
-        self._logger.info(f"Downloading asset {file.file_name!r} from {asset_url!r}")
         try:
             asset_data = self._pull_asset(asset_url)
         except Exception as e:
-            raise DownloadError(
-                f"Failed to download asset {file.file_name!r} from {asset_url!r}"
-            ) from e
+            raise DownloadError("Failed to download asset") from e
 
         # we don't want it to be compressed multiple times
         # since we're essentially doing a copy here.

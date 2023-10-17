@@ -127,6 +127,8 @@ class Namespace(_BaseModel):
         return cls(category=category, game_version=game_version, region=region)
 
     def get_locale(self) -> str:
+        # NOTE: when adding new region specific locales for the api,
+        # make sure to update `Realm.ALL_CATE_HARDCORE` as well.
         if self.region == RegionEnum.KR:
             return "ko_KR"
         elif self.region == RegionEnum.TW:
@@ -463,10 +465,20 @@ class Realm(_BaseModel):
     # wow/realm response has this field, but not connected realm response
     links: Optional[Any] = Field(None, alias="_links")
 
-    CATE_HARDCORE: ClassVar[str] = "Hardcore"
+    # NOTE: there should be a unified identifier (facepalm)
+    ALL_CATE_HARDCORE: ClassVar[List[str]] = [
+        # en_US
+        "Hardcore",
+        # zh_CN
+        "专家模式",
+        # zh_TW
+        "專家模式",
+        # ko_KR
+        "하드코어",
+    ]
 
     def is_hardcore(self) -> bool:
-        return self.category == self.CATE_HARDCORE
+        return self.category in self.ALL_CATE_HARDCORE
 
 
 class ConnectedRealm(_BaseModel):

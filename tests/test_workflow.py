@@ -54,7 +54,9 @@ class DummyAPIWrapper:
                     "locale": "en_US",
                     "region": region,
                     "connected_realm": {},
-                    "category": "" if connected_realm_id % 2 else Realm.CATE_HARDCORE,
+                    "category": ""
+                    if connected_realm_id % 2
+                    else Realm.ALL_CATE_HARDCORE[0],
                     "type": "",
                     "is_tournament": False,
                 },
@@ -66,7 +68,9 @@ class DummyAPIWrapper:
                     "locale": "en_US",
                     "region": region,
                     "connected_realm": {},
-                    "category": "" if connected_realm_id % 2 else Realm.CATE_HARDCORE,
+                    "category": ""
+                    if connected_realm_id % 2
+                    else Realm.ALL_CATE_HARDCORE[0],
                     "type": "",
                     "is_tournament": False,
                 },

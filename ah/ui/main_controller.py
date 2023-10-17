@@ -150,7 +150,7 @@ class WorkerThread(QThread):
         parent: QObject,
         func: Callable,
         *args,
-        _on_final: Callable = None,
+        on_final: Callable = None,
         **kwargs,
     ):
         # NOTE: make sure child class consumes all their arguments
@@ -165,8 +165,8 @@ class WorkerThread(QThread):
         super().__init__(parent=parent)
         self._func = func
         self._args = args
-        if _on_final:
-            self._sig_final.connect(_on_final)
+        if on_final:
+            self._sig_final.connect(on_final)
         self._kwargs = kwargs
 
     def run(self):
@@ -190,10 +190,10 @@ class ExporterDropdownWorkerThread(WorkerThread):
     # Dict[str, List[str]]
     _sig_data = pyqtSignal(dict)
 
-    def __init__(self, *args, _on_data: Callable = None, **kwargs):
+    def __init__(self, *args, on_data: Callable = None, **kwargs):
         super().__init__(*args, **kwargs)
-        if _on_data:
-            self._sig_data.connect(_on_data)
+        if on_data:
+            self._sig_data.connect(on_data)
 
     def run(self):
         ret = super().run()
@@ -510,7 +510,8 @@ class Window(QMainWindow, Ui_MainWindow):
         self._logger = logging.getLogger("MainWindow")
 
         self.setupUi(self)
-        # widgets that need to be disabled when updating or exporting
+        # widgets that need to be disabled when updating
+        # / exporting / selecting export dropdowns
         lock_on_any = [
             self.lineEdit_settings_db_path,
             self.lineEdit_settings_game_path,
@@ -521,21 +522,27 @@ class Window(QMainWindow, Ui_MainWindow):
         ]
         # widgets that need to be disabled when exporting
         self._lock_on_export = [
+            # export tab's
             self.comboBox_exporter_region,
             self.comboBox_exporter_game_version,
             self.listView_exporter_realms,
             self.checkBox_exporter_remote,
             self.pushButton_exporter_export,
+            # update tab's
             self.pushButton_updater_update,
         ]
         self._lock_on_export.extend(lock_on_any)
         # widgets that need to be disabled when updating
         self._lock_on_update = [
+            # export tab's (dropdowns unlocks export button)
+            self.comboBox_exporter_region,
+            self.comboBox_exporter_game_version,
+            self.pushButton_exporter_export,
+            # update tab's
             self.lineEdit_updater_id,
             self.lineEdit_updater_secret,
             self.checkBox_updater_remote,
             self.pushButton_updater_update,
-            self.pushButton_exporter_export,
         ]
         self._lock_on_update.extend(lock_on_any)
 
@@ -863,7 +870,14 @@ class Window(QMainWindow, Ui_MainWindow):
         repo = self.get_repo()
         m = GithubFileForker.validate_repo(repo)
         user, repo = m.group("user"), m.group("repo")
-        update_stat, version = gh_api.check_update(user, repo)
+        try:
+            update_stat, version = gh_api.check_update(user, repo)
+        except Exception as e:
+            self._logger.warning(f"Failed to check update. Error: {e}")
+            self._logger.debug("traceback:", exc_info=True)
+            return
+        else:
+            self._logger.info(f"Update status: {update_stat.name}, version: {version}")
 
         if update_stat == UpdateEnum.NONE:
             return
@@ -1014,8 +1028,8 @@ class Window(QMainWindow, Ui_MainWindow):
         @threaded(
             self,
             worker_cls=ExporterDropdownWorkerThread,
-            _on_final=on_final,
-            _on_data=on_data,
+            on_final=on_final,
+            on_data=on_data,
         )
         def task():
             # ioerror gets ignored by `load_meta`, returns empty dict.
@@ -1097,7 +1111,7 @@ class Window(QMainWindow, Ui_MainWindow):
             if not success:
                 self.popup_error(_t("MainWindow", "Export Error"), msg)
 
-        @threaded(self, _on_final=on_final)
+        @threaded(self, on_final=on_final)
         def task(*args, **kwargs):
             exporter_main(
                 db_path=db_path,
@@ -1120,6 +1134,7 @@ class Window(QMainWindow, Ui_MainWindow):
         try:
             db_path = self.get_db_path()
             repo = self.get_repo()
+            remote_mode = self.checkBox_updater_remote.isChecked()
             gh_proxy = self.get_gh_proxy()
             client_id = self.lineEdit_updater_id.text()
             client_secret = self.lineEdit_updater_secret.text()
@@ -1151,7 +1166,7 @@ class Window(QMainWindow, Ui_MainWindow):
             for region, game_version in combos:
                 updater_main(
                     db_path=db_path,
-                    repo=repo,
+                    repo=repo if remote_mode else None,
                     gh_proxy=gh_proxy,
                     game_version=game_version,
                     region=region,

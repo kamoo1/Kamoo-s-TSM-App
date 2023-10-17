@@ -88,7 +88,7 @@ class TestGHApi(TestCase):
             # no update
             stat, latest_ver = api.check_update("user", "repo", current_ver="v1.3.0")
             self.assertEqual(stat, UpdateEnum.NONE)
-            self.assertEqual(latest_ver, None)
+            self.assertEqual(latest_ver, "1.3.0")
 
             # required update
             stat, latest_ver = api.check_update("user", "repo", current_ver="v0.3.0")
