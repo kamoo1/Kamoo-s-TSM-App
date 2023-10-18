@@ -1,22 +1,27 @@
-import re
+from __future__ import annotations
+import logging
 import requests
 from requests.adapters import HTTPAdapter, Retry
-from logging import getLogger
-from typing import Optional, Dict, Any
+from typing import Dict, Any, List, Tuple
+from urllib.parse import urlparse
+from enum import Enum
 
+from semver import Version
+
+from ah import config, __version__
 from ah.vendors.blizzardapi import BlizzardApi
-from ah.models import Namespace, FactionEnum
+from ah.models import Namespace
 from ah.cache import bound_cache, BoundCacheMixin, Cache
 from ah.defs import SECONDS_IN
 
 __all__ = (
-    "BNAPIWrapper",
     "BNAPI",
     "GHAPI",
+    "UpdateEnum",
 )
 
 
-class BNAPIWrapper(BoundCacheMixin):
+class BNAPI(BoundCacheMixin):
     def __init__(
         self, client_id: str, client_secret: str, cache: Cache, *args, **kwargs
     ) -> None:
@@ -62,146 +67,67 @@ class BNAPIWrapper(BoundCacheMixin):
         )
 
 
-class BNAPI:
-    _logger = getLogger("BNAPI")
-
-    MAP_FACTION_AH_ID = {
-        FactionEnum.ALLIANCE: 2,
-        FactionEnum.HORDE: 6,
-    }
-
-    def __init__(
-        self,
-        client_id: Optional[str] = None,
-        client_secret: Optional[str] = None,
-        cache: Optional[Cache] = None,
-        wrapper=None,
-        *args,
-        **kwargs,
-    ) -> None:
-        if not wrapper:
-            if not all([client_id, client_secret, cache]):
-                raise ValueError(
-                    "client_id, client_secret and cache must be provided "
-                    "if no wrapper is provided."
-                )
-            self.wrapper = BNAPIWrapper(
-                client_id, client_secret, cache, *args, **kwargs
-            )
-        else:
-            self.wrapper = wrapper
-
-    def pull_connected_realms_ids(self, namespace: Namespace) -> Any:
-        connected_realms = self.wrapper.get_connected_realms_index(namespace)
-        for cr in connected_realms["connected_realms"]:
-            ret = re.search(r"connected-realm/(\d+)", cr["href"])
-            crid = ret.group(1)
-            yield int(crid)
-
-    def pull_connected_realm(self, namespace: Namespace, crid: int) -> Any:
-        """
-        >>> ret = {
-            # crid
-            "id": 123,
-            "timezone": "Asia/Taipei",
-            "realms": [
-                {
-                    "id": 123,
-                    "name": "Realm Name",
-                    "slug": "realm-slug"
-                },
-                ...
-            ]
-        }
-        """
-        connected_realm = self.wrapper.get_connected_realm(namespace, crid)
-        ret = {"id": crid, "realms": []}
-        for realm in connected_realm["realms"]:
-            if "timezone" in ret and ret["timezone"] != realm["timezone"]:
-                raise ValueError(
-                    "Timezone differes between realms under same connected realm!"
-                )
-
-            else:
-                ret["timezone"] = realm["timezone"]
-
-            ret["realms"].append(
-                {
-                    "id": realm["id"],
-                    "name": realm["name"],
-                    "slug": realm["slug"],
-                    "locale": realm["locale"],
-                }
-            )
-
-        return ret
-
-    def pull_connected_realms(self, namespace: Namespace) -> Any:
-        """
-
-        >>> {
-                # connected realms
-                $crid: $crid_data,
-                ...
-            }
-        """
-        crids = self.pull_connected_realms_ids(namespace)
-        ret = {}
-        for crid in crids:
-            try:
-                connected_realm = self.pull_connected_realm(namespace, crid)
-                ret[crid] = connected_realm
-            except Exception as e:
-                self._logger.error(f"Failed to pull connected realm data {crid}.")
-                self._logger.exception(e)
-
-        return ret
-
-    def pull_commodities(self, namespace: Namespace) -> Any:
-        commodities = self.wrapper.get_commodities(namespace)
-        return commodities
-
-    def pull_auctions(
-        self,
-        namespace: Namespace,
-        crid: int,
-        faction: FactionEnum = None,
-    ) -> Any:
-        auctions = self.wrapper.get_auctions(
-            namespace,
-            crid,
-            auction_house_id=self.MAP_FACTION_AH_ID.get(faction),
-        )
-        return auctions
+class UpdateEnum(Enum):
+    NONE = 0
+    OPTIONAL = 1
+    REQUIRED = 2
 
 
 class GHAPI(BoundCacheMixin):
     REQUESTS_KWARGS = {"timeout": 10}
+    RELEASED_ARCHIVE_NAME = config.RELEASED_ARCHIVE_NAME
+    logger = logging.getLogger("GHAPI")
 
     def __init__(self, cache: Cache, gh_proxy=None) -> None:
         self.gh_proxy = gh_proxy
+        if self.gh_proxy and self.gh_proxy[-1] != "/":
+            self.gh_proxy += "/"
         self.session = requests.Session()
+        # note: sometimes /tags returns 403
         retries = Retry(
-            total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
+            total=5, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504, 403]
         )
         self.session.mount("https://", HTTPAdapter(max_retries=retries))
         self.session.mount("http://", HTTPAdapter(max_retries=retries))
         super().__init__(cache=cache)
 
-    @bound_cache(SECONDS_IN.HOUR)
-    def get_assets_uri(self, owner: str, repo: str) -> Dict[str, str]:
-        url = "https://api.github.com/repos/{user}/{repo}/releases/latest"
+    @classmethod
+    def validate_gh_proxy(cls, gh_proxy: str) -> None:
+        if not gh_proxy:
+            return False
+
+        try:
+            result = urlparse(gh_proxy)
+            return all(
+                [result.scheme, result.netloc, result.scheme in ["http", "https"]]
+            )
+
+        except Exception:
+            return False
+
+    def add_proxy(self, url: str):
         if self.gh_proxy:
-            # TODO: make it safe to use url without trailing slash
-            url = self.gh_proxy + url
+            return self.gh_proxy + url
+        return url
+
+    @bound_cache(10 * SECONDS_IN.MIN)
+    def get_assets_uri(
+        self,
+        user: str,
+        repo: str,
+        tag: str = "latest",
+    ) -> Dict[str, str]:
+        self.logger.info(f"Fetching assets list from release {tag!r}")
+        url = f"https://api.github.com/repos/{user}/{repo}/releases/tags/{tag}"
+        url = self.add_proxy(url)
         resp = self.session.get(
-            url.format(user=owner, repo=repo),
+            url,
             **self.REQUESTS_KWARGS,
         )
         if resp.status_code != 200:
             raise ValueError(f"Failed to get latest releases, code: {resp.status_code}")
-        latest_release = resp.json()
-        latest_release_id = latest_release["id"]
+        d = resp.json()
+        release_id = d["id"]
 
         ret = {}
         page = 0
@@ -209,17 +135,12 @@ class GHAPI(BoundCacheMixin):
         while True:
             page += 1
             url = (
-                "https://api.github.com/repos/{user}/{repo}/"
-                "releases/{release_id}/assets?page={page}&per_page={per_page}"
+                f"https://api.github.com/repos/{user}/{repo}/"
+                f"releases/{release_id}/assets?page={page}&per_page={per_page}"
             )
+            url = self.add_proxy(url)
             resp = self.session.get(
-                url.format(
-                    user=owner,
-                    repo=repo,
-                    release_id=latest_release_id,
-                    page=page,
-                    per_page=per_page,
-                ),
+                url,
                 **self.REQUESTS_KWARGS,
             )
             if resp.status_code != 200:
@@ -236,11 +157,77 @@ class GHAPI(BoundCacheMixin):
 
         return ret
 
-    @bound_cache(SECONDS_IN.HOUR)
+    @bound_cache(10 * SECONDS_IN.MIN)
     def get_asset(self, url: str) -> bytes:
-        if self.gh_proxy:
-            url = self.gh_proxy + url
+        name = urlparse(url).path.split("/")[-1]
+        self.logger.info(f"Downloading asset {name!r}")
+        url = self.add_proxy(url)
         resp = self.session.get(url, **self.REQUESTS_KWARGS)
         if resp.status_code != 200:
-            raise ValueError("Failed to get releases, code: {resp.status_code}")
+            raise ValueError(f"Failed to get releases, code: {resp.status_code}")
         return resp.content
+
+    @bound_cache(10 * SECONDS_IN.MIN)
+    def get_tags(self, user: str, repo: str) -> List[str]:
+        self.logger.info(f"Fetching tags from {repo!r}")
+        url = f"https://api.github.com/repos/{user}/{repo}/tags"
+        url = self.add_proxy(url)
+        resp = self.session.get(url, **self.REQUESTS_KWARGS)
+        if resp.status_code != 200:
+            raise ValueError(f"Failed to get tags, code: {resp.status_code}")
+        tags = resp.json()
+        return [tag["name"] for tag in tags]
+
+    def get_versions(self, user: str, repo: str) -> List[Version]:
+        ret = []
+        for tag in self.get_tags(user, repo):
+            tag = tag.lstrip("v")
+            try:
+                ret.append(Version.parse(tag))
+            except ValueError:
+                pass
+
+        return ret
+
+    def get_latest_version(self, user: str, repo: str) -> Version | None:
+        versions = self.get_versions(user, repo)
+        if not versions:
+            return None
+
+        # filter out pre-releases
+        versions = [ver for ver in versions if not ver.prerelease]
+
+        return max(versions)
+
+    def check_update(
+        self, user: str, repo: str, current_ver: str | Version | None = None
+    ) -> Tuple[UpdateEnum, Version | None]:
+        if current_ver is None:
+            current_ver = Version.parse(__version__)
+
+        if isinstance(current_ver, str):
+            current_ver = current_ver.lstrip("v")
+            current_ver = Version.parse(current_ver)
+
+        latest_version = self.get_latest_version(user, repo)
+        if not latest_version or latest_version <= current_ver:
+            return UpdateEnum.NONE, latest_version
+
+        if latest_version.major > current_ver.major:
+            return UpdateEnum.REQUIRED, latest_version
+
+        else:
+            return UpdateEnum.OPTIONAL, latest_version
+
+    def get_build_release(self, user: str, repo: str, ver: str | Version) -> bytes:
+        if isinstance(ver, str):
+            ver = ver.lstrip("v")
+            ver = Version.parse(ver)
+
+        tag = f"v{ver}"
+        assets = self.get_assets_uri(user, repo, tag=tag)
+        if self.RELEASED_ARCHIVE_NAME not in assets:
+            msg = f"Failed to find {self.RELEASED_ARCHIVE_NAME!r} in release {tag!r}"
+            raise ValueError(msg)
+
+        return self.get_asset(assets[self.RELEASED_ARCHIVE_NAME])

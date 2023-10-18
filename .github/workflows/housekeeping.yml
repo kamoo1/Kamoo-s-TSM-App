@@ -32,5 +32,5 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Run Housekeeping Script
       run: >
-        PYTHONPATH=. python sbin/cache_housekeeping.py
+        PYTHONPATH=. python bin/cache_housekeeping.py
         --db_path ${{ env.DB_PATH }}

@@ -1,4 +1,7 @@
 from unittest import TestCase
+from tempfile import TemporaryDirectory
+import json
+from copy import deepcopy
 
 from ah.models.blizzard import (
     Namespace,
@@ -11,12 +14,14 @@ from ah.models.self import (
     DBFileName,
     DBTypeEnum,
     FactionEnum,
+    Meta,
+    ConnectedRealm,
 )
+from ah.db import DBHelper
 
 
 class TestModels(TestCase):
     def test_name_space(self):
-
         ns = Namespace(
             category=NameSpaceCategoriesEnum.DYNAMIC,
             game_version=GameVersionEnum.CLASSIC,
@@ -299,3 +304,149 @@ class TestModels(TestCase):
         DBFileName.from_str("dynamic-us_commodities.bin")
         with self.assertRaises(ValueError):
             DBFileName.from_str("dynamic-classic1x-us_commodities.bin")
+
+    def test_meta_from_file(self):
+        temp = TemporaryDirectory()
+        with temp:
+            path = temp.name
+            helper = DBHelper(path)
+            namespace = Namespace(
+                category=NameSpaceCategoriesEnum.DYNAMIC,
+                game_version=GameVersionEnum.CLASSIC,
+                region=RegionEnum.US,
+            )
+            meta_file = helper.get_file(namespace, DBTypeEnum.META)
+            meta_path = meta_file.file_path
+            meta_data = {
+                "update": {
+                    "start_ts": 1,
+                    "end_ts": 2,
+                    "duration": 1,
+                },
+                "connected_realms": {
+                    "1": [
+                        {
+                            "name": "realm name",
+                            "id": 1,
+                            "slug": "realm_name",
+                            "is_hardcore": True,
+                        },
+                    ],
+                },
+                "system": {},
+            }
+            with open(meta_path, "w") as f:
+                json.dump(meta_data, f)
+
+            # update meta data
+            meta = Meta.from_file(meta_file)
+            meta.set_system({"foo": "bar"})
+            meta.set_update_ts(10, 20)
+            cr_resp = {
+                "id": 100,
+                "realms": [
+                    # id, region, connected_realm,
+                    # name, category, locale, timezone,
+                    # type, is_tournament, slug, links
+                    {
+                        "id": 100,
+                        "region": "US",
+                        "connected_realm": {},
+                        "name": "realm name",
+                        "category": "",
+                        "locale": "",
+                        "timezone": "",
+                        "type": "",
+                        "is_tournament": False,
+                        "slug": "",
+                        "_links": {},
+                    }
+                ],
+            }
+            cr = ConnectedRealm.model_validate(cr_resp)
+            meta.add_connected_realm(100, cr)
+            meta.to_file(meta_file)
+
+            # update expected meta data
+            expected_meta_data = deepcopy(meta_data)
+            expected_meta_data["system"] = {"foo": "bar"}
+            expected_meta_data["update"]["start_ts"] = 10
+            expected_meta_data["update"]["end_ts"] = 20
+            expected_meta_data["update"]["duration"] = 10
+            expected_meta_data["connected_realms"]["100"] = [
+                {
+                    "id": 100,
+                    "name": "realm name",
+                    "slug": "",
+                    "is_hardcore": False,
+                }
+            ]
+            with open(meta_path, "r") as f:
+                actual_meta_data = json.load(f)
+
+            self.assertDictEqual(actual_meta_data, expected_meta_data)
+
+    def test_meta_old_format_convert(self):
+        old_meta_data = {
+            "update": {
+                "start_ts": 1,
+                "end_ts": 2,
+                "duration": 1,
+            },
+            "connected_realms": {
+                "1": [
+                    "name1",
+                    "name2",
+                ],
+            },
+            "system": {},
+        }
+
+        # expected meta data after conversion
+        expected_meta_data = {
+            "update": {
+                "start_ts": 1,
+                "end_ts": 2,
+                "duration": 1,
+            },
+            "connected_realms": {
+                "1": [
+                    {
+                        "name": "name1",
+                        "id": None,
+                        "slug": None,
+                        "is_hardcore": False,
+                    },
+                    {
+                        "name": "name2",
+                        "id": None,
+                        "slug": None,
+                        "is_hardcore": False,
+                    },
+                ],
+            },
+            "system": {},
+        }
+        temp = TemporaryDirectory()
+        with temp:
+            path = temp.name
+            helper = DBHelper(path)
+            namespace = Namespace(
+                category=NameSpaceCategoriesEnum.DYNAMIC,
+                game_version=GameVersionEnum.CLASSIC,
+                region=RegionEnum.US,
+            )
+            meta_file = helper.get_file(namespace, DBTypeEnum.META)
+            meta_path = meta_file.file_path
+            with open(meta_path, "w") as f:
+                json.dump(old_meta_data, f)
+
+            # load old meta data, convert and save
+            meta = Meta.from_file(meta_file)
+            meta.to_file(meta_file)
+
+            # load actual meta data, should be converted
+            with open(meta_path, "r") as f:
+                actual_meta_data = json.load(f)
+
+            self.assertDictEqual(actual_meta_data, expected_meta_data)

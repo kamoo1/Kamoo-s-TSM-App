@@ -62,7 +62,7 @@ def main(data_path: str = None, output_path: str = None):
 
 def parse_args(raw_args):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", help="Path to data", default="./data", type=str)
+    parser.add_argument("--data_path", help="Path to data", default="./build", type=str)
     parser.add_argument(
         "--output_path",
         help="Path to output",

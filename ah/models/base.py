@@ -1,13 +1,16 @@
+import sys
 from typing import ClassVar, Generic, Iterator, TypeVar, Callable, Type, Any
 from logging import getLogger, Logger
 
-from pydantic import BaseModel, Extra
+from pydantic import ConfigDict, BaseModel
 
 __all__ = (
     "_BaseModel",
     "_RootListMixin",
     "_RootDictMixin",
     "ConverterWrapper",
+    "StrEnum_",
+    "IntEnum_",
 )
 
 _VT = TypeVar("_VT")
@@ -15,6 +18,26 @@ _KT = TypeVar("_KT")
 
 _ITEMS_T = TypeVar("_ITEMS_T")
 _ITEM_T = TypeVar("_ITEM_T")
+
+
+# if python 3.11+, use `enum.StrEnum` instead of `str, enum.Enum`
+# https://github.com/python/cpython/issues/100458
+if sys.version_info >= (3, 11):
+    from enum import StrEnum as StrEnum_, IntEnum as IntEnum_
+
+else:
+    from enum import Enum
+
+    # Note: must not use `type`
+    # https://stackoverflow.com/questions/69328274
+    class StrEnum_(str, Enum):
+        # Add `__str__` to make it behave as expected in case of `str(enum)`
+        # https://blog.pecar.me/python-enum
+        def __str__(self) -> str:
+            return self.value
+
+    class IntEnum_(int, Enum):
+        pass
 
 
 class ConverterWrapper:
@@ -69,18 +92,16 @@ class _BaseModel(BaseModel):
     def dict(self, *args, **kwargs):
         kwargs["exclude_none"] = kwargs.get("exclude_none", True)
         kwargs["by_alias"] = kwargs.get("by_alias", True)
-        return super().dict(*args, **kwargs)
+        return super().model_dump(*args, **kwargs)
 
     def json(self, *args, **kwargs):
         kwargs["exclude_none"] = kwargs.get("exclude_none", True)
         kwargs["by_alias"] = kwargs.get("by_alias", True)
-        return super().json(*args, **kwargs, exclude_none=True, by_alias=True)
+        return super().model_dump_json(
+            *args, **kwargs, exclude_none=True, by_alias=True
+        )
 
-    class Config:
-        extra = Extra.forbid
-        # this makes pydantic use the enum value instead of the enum
-        # TODO: test dumping them actually serializes the value
-        # use_enum_values = True
+    model_config = ConfigDict(extra="forbid")
 
 
 class _RootListMixin(Generic[_VT]):

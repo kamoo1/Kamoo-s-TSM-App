@@ -4,10 +4,11 @@ import argparse
 import time
 from logging import getLogger
 from typing import Optional, Tuple
-import platform
-import psutil
+import re
 
-from ah.api import BNAPI
+from requests.exceptions import HTTPError
+
+from ah.api import BNAPI, GHAPI
 from ah.models import (
     AuctionsResponse,
     CommoditiesResponse,
@@ -18,151 +19,227 @@ from ah.models import (
     NameSpaceCategoriesEnum,
     GameVersionEnum,
     FactionEnum,
+    MapItemStringMarketValueRecords,
+    ConnectedRealm,
+    Meta,
 )
-from ah.db import AuctionDB
+from ah.storage import BinaryFile
+from ah.db import DBHelper, GithubFileForker
 from ah import config
 from ah.cache import Cache
+from ah.sysinfo import SysInfo
 
 
 class Updater:
+    RECORDS_EXPIRES_IN = config.MIN_RECORD_EXPIRES
+
     def __init__(
         self,
         bn_api: BNAPI,
-        db: AuctionDB,
+        db_helper: DBHelper,
+        forker: GithubFileForker = None,
     ) -> None:
         self._logger = getLogger(self.__class__.__name__)
         self.bn_api = bn_api
-        self.db = db
+        self.db_helper = db_helper
+        self.forker = forker
 
     def pull_increment(
-        self, namespace: Namespace, crid: int = None, faction: FactionEnum = None
+        self,
+        namespace: Namespace,
+        connected_realm_id: int = None,
+        faction: FactionEnum = None,
     ) -> Optional[MapItemStringMarketValueRecord]:
-        if crid:
+        """pull lastest auction increment from api, if `connected_realm_id`
+        not given, then pull commodities (retail commodities are region-wide).
+
+        NOTE: failed to fetch auctions for some connected realms,
+              due to `auctions` field being `None` or a 404 status code.
+
+              we will return a falsy increment in case of `auctions` field being `None`,
+              or returning `None` when 404. together with warning log message.
+
+        """
+        if connected_realm_id:
             try:
                 resp = AuctionsResponse.from_api(
-                    self.bn_api, namespace, crid, faction=faction
+                    self.bn_api, namespace, connected_realm_id, faction=faction
                 )
-            except Exception:
-                self._logger.exception(
-                    f"Failed to request auctions for {namespace} {crid} {faction!s}"
+            except HTTPError as e:
+                self._logger.warning(
+                    "Failed to request auctions for: "
+                    f"{namespace!r} {connected_realm_id} {faction!s}. "
+                    f"Error message: {e!s}"
                 )
+                self._logger.debug("traceback:", exc_info=True)
                 return
+
+            if not resp.get_auctions():
+                self._logger.warning(
+                    "Requested auction was empty: "
+                    f"{namespace!r} {connected_realm_id} {faction!s}",
+                )
+
         else:
             try:
                 resp = CommoditiesResponse.from_api(self.bn_api, namespace)
-            except Exception:
-                self._logger.exception(f"Failed to request commodities for {namespace}")
+            except HTTPError as e:
+                self._logger.warning(
+                    f"Failed to request commodities for: {namespace=!r}. "
+                    f"Error message: {e!s}"
+                )
+                self._logger.debug("traceback:", exc_info=True)
                 return
+
+            if not resp.get_auctions():
+                self._logger.warning(
+                    f"Requested commodities was empty: {namespace!r}",
+                )
 
         increment = MapItemStringMarketValueRecord.from_response(
             resp, namespace.game_version
         )
+
         return increment
 
-    def update_region_dbs(self, namespace: Namespace) -> Tuple[int, int]:
+    def save_increment(
+        self,
+        file: BinaryFile,
+        increment: MapItemStringMarketValueRecord,
+        start_ts: int,
+    ) -> MapItemStringMarketValueRecords:
+        records = MapItemStringMarketValueRecords.from_file(file, forker=self.forker)
+        n_added_records, n_added_entries = records.update_increment(increment)
+        n_removed_records = records.remove_expired(start_ts - self.RECORDS_EXPIRES_IN)
+        n_removed_records += records.compress(start_ts, self.RECORDS_EXPIRES_IN)
+        records.to_file(file)
+        self._logger.info(
+            f"DB update: {file!r}, {n_added_records=} "
+            f"{n_added_entries=} {n_removed_records=}"
+        )
+        return records
+
+    def update_region_records(
+        self,
+        namespace: Namespace,
+        connected_realm_ids: Tuple[int],
+    ) -> Tuple[int, int]:
+        """update auction / commodities records for every connected realm under
+        this region
+
+        returns update start_ts and end_ts
+        """
         start_ts = int(time.time())
-        crids = self.bn_api.pull_connected_realms_ids(namespace)
         if namespace.game_version == GameVersionEnum.RETAIL:
             factions = [None]
         else:
             factions = [FactionEnum.ALLIANCE, FactionEnum.HORDE]
 
-        for crid in crids:
+        for crid in connected_realm_ids:
             for faction in factions:
-                # NOTE: present in last api, but can't fetch auctions here.
-                # (tw vanilla) 5299 5301
-                # (tw wlk)     5744
                 increment = self.pull_increment(
                     namespace,
+                    connected_realm_id=crid,
+                    faction=faction,
+                )
+                if not increment:
+                    continue
+                file = self.db_helper.get_file(
+                    namespace,
+                    DBTypeEnum.AUCTIONS,
                     crid=crid,
                     faction=faction,
                 )
-                if increment:
-                    file = self.db.get_file(
-                        namespace,
-                        DBTypeEnum.AUCTIONS,
-                        crid=crid,
-                        faction=faction,
-                    )
-                    self.db.update_db(file, increment, start_ts)
+                self.save_increment(file, increment, start_ts)
 
         if namespace.game_version == GameVersionEnum.RETAIL:
             increment = self.pull_increment(namespace)
             if increment:
-                file = self.db.get_file(namespace, DBTypeEnum.COMMODITIES)
-                self.db.update_db(file, increment, start_ts)
+                file = self.db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
+                self.save_increment(file, increment, start_ts)
 
-        end_ts = int(time.time())
+        # just in case we're in the same ts as the increment, which cause
+        # `MarketValueRecords.average_by_day` to ignore the increment record
+        # because the ts passed in is the same as the increment's ts
+        end_ts = int(time.time()) + 1
         return start_ts, end_ts
 
-    def update_region_meta(
-        self, namespace: Namespace, start_ts: int, end_ts: int
-    ) -> None:
-        # update timestamps
-        data_update = {
-            "start_ts": start_ts,
-            "end_ts": end_ts,
-            "duration": end_ts - start_ts,
-        }
+    def pull_region_meta(self, namespace: Namespace) -> Meta:
+        """get latest connected realm info for this region"""
+        meta = Meta()
+        crids = []
+        resp = self.bn_api.get_connected_realms_index(namespace)
+        for cr in resp["connected_realms"]:
+            match = re.search(r"connected-realm/(\d+)", cr["href"])
+            crid = match.group(1)
+            crids.append(int(crid))
 
-        # connected realms data
-        data_cr = {}
-        # NOTE: listed in first api, but can't fetch the details in the second api.
-        # (tw vanilla) 5299
-        # (tw wlk)     5744
-        cr_resp = self.bn_api.pull_connected_realms(namespace)
-        for cr_id in cr_resp.keys():
-            cr_info = cr_resp[cr_id]
-            realm_names = [realm["name"] for realm in cr_info["realms"]]
-            data_cr[cr_id] = realm_names
+        for crid in crids:
+            try:
+                connected_realm = ConnectedRealm.from_api(self.bn_api, namespace, crid)
+            except HTTPError as e:
+                """
+                NOTE: some of the connected realms fails with a 404 status code.
 
-        # data for system info
-        data_sys = {
-            "platform": platform.platform(),
-            "python_version": platform.python_version(),
-            "cpu_count": psutil.cpu_count(),
-            "load_avg": psutil.getloadavg(),
-            "memory_percent": psutil.virtual_memory().percent,
-            "memory_total": psutil.virtual_memory().total,
-        }
+                """
+                self._logger.warning(
+                    "Failed to request connected realm data for: "
+                    f"{namespace!r} {crid}. "
+                    f"Error message: {e!s}"
+                )
+                self._logger.debug("traceback:", exc_info=True)
+            else:
+                meta.add_connected_realm(crid, connected_realm)
 
-        meta = {
-            "update": data_update,
-            "connected_realms": data_cr,
-            "system": data_sys,
-        }
-        meta_file = self.db.get_file(namespace, DBTypeEnum.META)
-        self.db.update_meta(meta_file, meta)
+        return meta
+
+    def update_region(self, namespace: Namespace) -> None:
+        sys_info = SysInfo()
+        sys_info.begin_monitor()
+        meta = self.pull_region_meta(namespace)
+        start_ts, end_ts = self.update_region_records(
+            namespace, meta.get_connected_realm_ids()
+        )
+        meta.set_update_ts(start_ts, end_ts)
+        sys_info.stop_monitor()
+        meta.set_system(sys_info.get_sysinfo())
+        meta_file = self.db_helper.get_file(namespace, DBTypeEnum.META)
+        meta.to_file(meta_file)
 
 
 def main(
     db_path: str = None,
+    repo: str = None,
+    gh_proxy: str = None,
     game_version: GameVersionEnum = None,
     region: RegionEnum = None,
+    # below are for testability
     cache: Cache = None,
+    gh_api: GHAPI = None,
     bn_api: BNAPI = None,
 ):
-    if bn_api is None:
-        if cache is None:
-            cache_path = config.DEFAULT_CACHE_PATH
-            cache = Cache(cache_path)
-        bn_api = BNAPI(
-            config.BN_CLIENT_ID,
-            config.BN_CLIENT_SECRET,
-            cache,
-        )
-    db = AuctionDB(
-        db_path, config.MARKET_VALUE_RECORD_EXPIRES, config.DEFAULT_DB_COMPRESS
+    cache = cache or Cache(config.DEFAULT_CACHE_PATH)
+
+    if repo:
+        gh_api = gh_api or GHAPI(cache, gh_proxy)
+        forker = GithubFileForker(db_path, repo, gh_api)
+    else:
+        forker = None
+
+    bn_api = bn_api or BNAPI(
+        config.BN_CLIENT_ID,
+        config.BN_CLIENT_SECRET,
+        cache,
     )
     namespace = Namespace(
         category=NameSpaceCategoriesEnum.DYNAMIC,
         game_version=game_version,
         region=region,
     )
-    task_manager = Updater(bn_api, db)
-    start_ts, end_ts = task_manager.update_region_dbs(namespace)
-    task_manager.update_region_meta(namespace, start_ts, end_ts)
-    task_manager._logger.info(f"Updated {namespace}")
+    db_helper = DBHelper(db_path)
+    updater = Updater(bn_api, db_helper, forker=forker)
+    updater.update_region(namespace)
+    updater._logger.info(f"Updated {namespace!r}")
 
 
 def parse_args(raw_args):
@@ -176,6 +253,24 @@ def parse_args(raw_args):
         type=str,
     )
     parser.add_argument(
+        "--repo",
+        type=str,
+        default=None,
+        help="Address of Github repo that's hosting the db files. If given, "
+        "download and use repo's db if local does not exist, "
+        "otherwise use local db straight away. ",
+    )
+    parser.add_argument(
+        "--gh_proxy",
+        type=str,
+        default=None,
+        help="URL of Github proxy server, for people having trouble accessing Github "
+        "while using --repo option. "
+        "Read more at https://github.com/crazypeace/gh-proxy, "
+        "this program need a modified version that hosts API requests: "
+        "https://github.com/hunshcn/gh-proxy/issues/44",
+    )
+    parser.add_argument(
         "--game_version",
         choices={e.name.lower() for e in GameVersionEnum},
         default=default_game_version,
@@ -187,6 +282,17 @@ def parse_args(raw_args):
         help="Region to export",
     )
     args = parser.parse_args(raw_args)
+
+    if args.repo and not GithubFileForker.validate_repo(args.repo):
+        raise ValueError(
+            f"Invalid Github repo given by '--repo' option, "
+            f"it should be a valid Github repo URL, not {args.repo!r}."
+        )
+    if args.repo and args.gh_proxy and not GHAPI.validate_gh_proxy(args.gh_proxy):
+        raise ValueError(
+            f"Invalid Github proxy server given by '--gh_proxy' option, "
+            f"it should be a valid URL, not {args.gh_proxy!r}."
+        )
     args.game_version = GameVersionEnum[args.game_version.upper()]
     args.region = RegionEnum(args.region)
     return args

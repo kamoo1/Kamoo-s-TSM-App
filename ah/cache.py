@@ -15,9 +15,6 @@ from ah.fs import ensure_path, remove_path
 
 class Cache:
     def __init__(self, cache_path: str) -> None:
-
-        # get temp path of the system,
-        # (e.g. /tmp on linux, C:\Users\username\AppData\Local\Temp on windows)
         self._logger = getLogger(__name__)
         self.cache_path = cache_path
         ensure_path(self.cache_path)

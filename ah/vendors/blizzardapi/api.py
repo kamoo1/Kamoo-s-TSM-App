@@ -1,6 +1,8 @@
 """api.py file."""
 import requests
 
+from ah import config
+
 
 class Api:
     """Base API class.
@@ -52,9 +54,8 @@ class Api:
 
     def _response_handler(self, response):
         """Handle the response."""
+        response.raise_for_status()
         resp = response.json()
-        if "code" in resp and resp["code"] != 200:
-            raise IOError(f"response error, {resp}.")
         return resp
 
     def _request_handler(self, url, region, query_params):
@@ -66,7 +67,7 @@ class Api:
         if query_params.get("access_token") is None:
             query_params["access_token"] = self._access_token
 
-        response = self._session.get(url, params=query_params)
+        response = self._session.get(url, params=query_params, verify=config.VERIFY_SSL)
 
         return self._response_handler(response)
 
