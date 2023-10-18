@@ -265,14 +265,16 @@ def main(args: List[str] = sys.argv[1:]):
     ]
     kwargs = parse_args(args)
     func = kwargs.pop("func")
-    stds = {sys.stdin.name, sys.stdout.name, sys.stderr.name}
+    # stds might be `None` after `Pyinstaller` packaging
+    stds = filter(None, (sys.stdin, sys.stdout, sys.stderr))
+    std_names = {std.name for std in stds}
 
     try:
         func(**kwargs)
     finally:
         for key in need_close:
             f = kwargs.get(key)
-            if isinstance(f, io.TextIOWrapper) and f.name not in stds:
+            if isinstance(f, io.TextIOWrapper) and f.name not in std_names:
                 f.close()
 
 
