@@ -21,16 +21,6 @@ __all__ = (
     "get_hash",
 )
 
-PATH_WOW_TO_TSM_LRI = [
-    "Interface",
-    "AddOns",
-    "TradeSkillMaster",
-    "External",
-    "EmbeddedLibs",
-    "LibRealmInfo",
-    "LibRealmInfo.lua",
-]
-
 _logger = logging.getLogger(__name__)
 
 
