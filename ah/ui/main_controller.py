@@ -8,7 +8,7 @@ from typing import (
     Dict,
     Callable,
 )
-from functools import wraps
+from functools import wraps, lru_cache
 import logging
 import itertools
 import json
@@ -43,6 +43,7 @@ from PyQt5.QtCore import (
     QLocale,
 )
 
+from ah import __version__
 from ah import config
 from ah.ui.main_view import Ui_MainWindow
 from ah.tsm_exporter import TSMExporter, main as exporter_main
@@ -865,6 +866,7 @@ class Window(QMainWindow, Ui_MainWindow):
         )
 
     def on_check_update(self) -> None:
+        self._logger.info(f"current version: {__version__}")
         # check version
         gh_api = self.get_gh_api()
         repo = self.get_repo()
@@ -1218,8 +1220,11 @@ class Window(QMainWindow, Ui_MainWindow):
     def popup_error(self, type: str, message: str) -> None:
         QMessageBox.critical(self, type, message)
 
+    @lru_cache(maxsize=1)
     def get_cache(self) -> Cache:
-        return Cache(config.DEFAULT_CACHE_PATH)
+        cache = Cache(config.DEFAULT_CACHE_PATH)
+        cache.remove_expired()
+        return cache
 
     def get_gh_proxy(self) -> str:
         if self.checkBox_settings_gh_proxy.isChecked():

@@ -433,6 +433,7 @@ def main(
 ):
     if repo:
         cache = cache or Cache(config.DEFAULT_CACHE_PATH)
+        cache.remove_expired()
         gh_api = gh_api or GHAPI(cache, gh_proxy=gh_proxy)
         forker = GithubFileForker(db_path, repo, gh_api)
     else:

@@ -11,9 +11,12 @@ from logging import getLogger
 from functools import wraps
 
 from ah.fs import ensure_path, remove_path
+from ah import config
 
 
 class Cache:
+    CACHE_EXPIRES_IN = config.DEFAULT_CACHE_EXPIRES_IN
+
     def __init__(self, cache_path: str) -> None:
         self._logger = getLogger(__name__)
         self.cache_path = cache_path
@@ -49,6 +52,7 @@ class Cache:
         modtime = os.path.getmtime(path)
         if expires >= 0 and time.time() - modtime > expires:
             self._logger.debug(f"cache get: {key} expired")
+            os.remove(path)
             return default
 
         with open(path, "rb") as file:
@@ -68,6 +72,15 @@ class Cache:
     def purge(self) -> None:
         """Purge the cache by removing files under cache dir."""
         remove_path(self.cache_path)
+
+    def remove_expired(self, *, expires_in: int = CACHE_EXPIRES_IN) -> None:
+        """Remove expired cache."""
+        for key in os.listdir(self.cache_path):
+            path = self._get_path(key)
+            modtime = os.path.getmtime(path)
+            if time.time() - modtime > expires_in:
+                os.remove(path)
+                self._logger.debug(f"remove expired: {key}")
 
 
 class BoundCacheMixin:

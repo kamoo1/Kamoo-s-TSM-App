@@ -1,5 +1,6 @@
 from unittest import TestCase, mock
 import tempfile
+import os
 
 from ah.cache import Cache, bound_cache, BoundCacheMixin
 
@@ -27,10 +28,13 @@ class TestCache(TestCase):
             with mock.patch("os.path.getmtime", return_value=100), mock.patch(
                 "time.time", return_value=110
             ):
+                self.assertEqual(cache.get("key", expires=11), "value")
+                self.assertEqual(cache.get("key", expires=10), "value")
+                # expired cache is removed automatically
                 self.assertEqual(cache.get("key", expires=9), None)
                 self.assertEqual(cache.get("key", default=..., expires=9), ...)
-                self.assertEqual(cache.get("key", expires=10), "value")
-                self.assertEqual(cache.get("key", expires=11), "value")
+                self.assertEqual(cache.get("key", expires=10), None)
+                self.assertEqual(cache.get("key", default=..., expires=10), ...)
 
             cache.purge()
 
@@ -60,3 +64,33 @@ class TestCache(TestCase):
                 self.assertEqual(foo.foo(), 3)
 
             cache.purge()
+
+    def test_remove_expired(self):
+        files = {
+            "a": 100,
+            "b": 200,
+            "c": 300,
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache = Cache(tmpdir)
+            for key, mtime in files.items():
+                path = cache._get_path(key)
+                with open(path, "w") as file:
+                    file.write(key)
+                os.utime(path, (mtime, mtime))
+
+            with mock.patch("time.time", return_value=400):
+                cache.remove_expired(expires_in=300)
+                self.assertEqual(os.listdir(tmpdir), ["a", "b", "c"])
+
+            with mock.patch("time.time", return_value=400):
+                cache.remove_expired(expires_in=299)
+                self.assertEqual(os.listdir(tmpdir), ["b", "c"])
+
+            with mock.patch("time.time", return_value=400):
+                cache.remove_expired(expires_in=100)
+                self.assertEqual(os.listdir(tmpdir), ["c"])
+
+            with mock.patch("time.time", return_value=400):
+                cache.remove_expired(expires_in=99)
+                self.assertEqual(os.listdir(tmpdir), [])
