@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 import requests
 from requests.adapters import HTTPAdapter, Retry
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Generator
 from urllib.parse import urlparse
 from enum import Enum
 
@@ -75,6 +75,7 @@ class UpdateEnum(Enum):
 
 class GHAPI(BoundCacheMixin):
     REQUESTS_KWARGS = {"timeout": 10}
+    PAGINATION_PER_PAGE = 100
     RELEASED_ARCHIVE_NAME = config.RELEASED_ARCHIVE_NAME
     logger = logging.getLogger("GHAPI")
 
@@ -90,6 +91,30 @@ class GHAPI(BoundCacheMixin):
         self.session.mount("https://", HTTPAdapter(max_retries=retries))
         self.session.mount("http://", HTTPAdapter(max_retries=retries))
         super().__init__(cache=cache)
+
+    def paginated(
+        self,
+        url: str,
+        session: requests.Session = None,
+        method: str = "get",
+        add_proxy: bool = False,
+        **kwargs,
+    ) -> Generator[requests.Response, None, None]:
+        url_ = url
+        # `GHAPI.REQUESTS_KWARGS` overwrites duplicated keys
+        kwargs_ = {**kwargs, **GHAPI.REQUESTS_KWARGS}
+        r = session or requests.Session()
+        while True:
+            if add_proxy:
+                url_ = self.add_proxy(url_)
+            resp = r.request(method, url_, **kwargs_)
+            yield resp
+            if "next" not in resp.links:
+                break
+            # GitHub api automatically adds our `per_page` param to the next url
+            url_ = resp.links["next"]["url"]
+            # use params from response for future requests
+            kwargs_.pop("params", None)
 
     @classmethod
     def validate_gh_proxy(cls, gh_proxy: str) -> None:
@@ -130,19 +155,13 @@ class GHAPI(BoundCacheMixin):
         release_id = d["id"]
 
         ret = {}
-        page = 0
-        per_page = 100
-        while True:
-            page += 1
-            url = (
-                f"https://api.github.com/repos/{user}/{repo}/"
-                f"releases/{release_id}/assets?page={page}&per_page={per_page}"
-            )
-            url = self.add_proxy(url)
-            resp = self.session.get(
-                url,
-                **self.REQUESTS_KWARGS,
-            )
+        url = f"https://api.github.com/repos/{user}/{repo}/releases/{release_id}/assets"
+        for resp in self.paginated(
+            url,
+            session=self.session,
+            add_proxy=True,
+            params={"per_page": self.PAGINATION_PER_PAGE},
+        ):
             if resp.status_code != 200:
                 raise ValueError(
                     f"Failed to get latest release assets, code: {resp.status_code}"
@@ -151,9 +170,6 @@ class GHAPI(BoundCacheMixin):
             assets = resp.json()
             for asset in assets:
                 ret[asset["name"]] = asset["browser_download_url"]
-
-            if len(assets) < per_page:
-                break
 
         return ret
 
@@ -170,13 +186,22 @@ class GHAPI(BoundCacheMixin):
     @bound_cache(10 * SECONDS_IN.MIN)
     def get_tags(self, user: str, repo: str) -> List[str]:
         self.logger.info(f"Fetching tags from {repo!r}")
+        ret = []
         url = f"https://api.github.com/repos/{user}/{repo}/tags"
-        url = self.add_proxy(url)
-        resp = self.session.get(url, **self.REQUESTS_KWARGS)
-        if resp.status_code != 200:
-            raise ValueError(f"Failed to get tags, code: {resp.status_code}")
-        tags = resp.json()
-        return [tag["name"] for tag in tags]
+        for resp in self.paginated(
+            url,
+            session=self.session,
+            add_proxy=True,
+            params={"per_page": self.PAGINATION_PER_PAGE},
+        ):
+            if resp.status_code != 200:
+                raise ValueError(f"Failed to get tags, code: {resp.status_code}")
+
+            tags = resp.json()
+            for tag in tags:
+                ret.append(tag["name"])
+
+        return ret
 
     def get_versions(self, user: str, repo: str) -> List[Version]:
         ret = []
