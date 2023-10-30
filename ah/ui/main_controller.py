@@ -8,7 +8,7 @@ from typing import (
     Dict,
     Callable,
 )
-from functools import wraps, lru_cache
+from functools import wraps, lru_cache, partial
 import logging
 import itertools
 import json
@@ -793,8 +793,10 @@ class Window(QMainWindow, Ui_MainWindow):
 
         # on list item double click, toggle check
         self.listView_exporter_realms.doubleClicked.connect(
-            self.on_exporter_list_dblclick
+            partial(self.on_exporter_list_click, click_type="double")
         )
+        # on list item single click, toggles automatically if on checkbox
+        self.listView_exporter_realms.clicked.connect(self.on_exporter_list_click)
 
         # on export button click, export
         self.pushButton_exporter_export.clicked.connect(self.on_exporter_export)
@@ -817,8 +819,10 @@ class Window(QMainWindow, Ui_MainWindow):
 
         # on list item double click, toggle check
         self.listView_updater_combos.doubleClicked.connect(
-            self.on_updater_list_dblclick
+            partial(self.on_updater_list_click, click_type="double")
         )
+        # on list item single click, toggles automatically if on checkbox
+        self.listView_updater_combos.clicked.connect(self.on_updater_list_click)
 
         # on update button click, update
         self.pushButton_updater_update.clicked.connect(self.on_updater_update)
@@ -959,20 +963,28 @@ class Window(QMainWindow, Ui_MainWindow):
         level = self.comboBox_log_log_level.currentText()
         handler.setLevel(level)
 
-    def on_exporter_list_dblclick(self, index: QModelIndex) -> None:
+    def on_exporter_list_click(
+        self, index: QModelIndex, click_type: str = "single"
+    ) -> None:
         model = self.listView_exporter_realms.model()
         item = model.itemFromIndex(index)
-        item.setCheckState(
-            Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked
-        )
+        # double click: toggle check manually
+        if click_type == "double":
+            item.setCheckState(
+                Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked
+            )
         model.set_selected(index.row(), item.checkState() == Qt.Checked)
 
-    def on_updater_list_dblclick(self, index: QModelIndex) -> None:
+    def on_updater_list_click(
+        self, index: QModelIndex, click_type: str = "single"
+    ) -> None:
         model = self.listView_updater_combos.model()
         item = model.itemFromIndex(index)
-        item.setCheckState(
-            Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked
-        )
+        # double click: toggle check manually
+        if click_type == "double":
+            item.setCheckState(
+                Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked
+            )
         model.set_selected(index.row(), item.checkState() == Qt.Checked)
 
     def on_exporter_dropdown_change(self) -> None:
