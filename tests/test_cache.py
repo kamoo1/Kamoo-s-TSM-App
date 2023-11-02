@@ -81,11 +81,11 @@ class TestCache(TestCase):
 
             with mock.patch("time.time", return_value=400):
                 cache.remove_expired(expires_in=300)
-                self.assertEqual(os.listdir(tmpdir), ["a", "b", "c"])
+                self.assertEqual(set(os.listdir(tmpdir)), {"a", "b", "c"})
 
             with mock.patch("time.time", return_value=400):
                 cache.remove_expired(expires_in=299)
-                self.assertEqual(os.listdir(tmpdir), ["b", "c"])
+                self.assertEqual(set(os.listdir(tmpdir)), {"b", "c"})
 
             with mock.patch("time.time", return_value=400):
                 cache.remove_expired(expires_in=100)
