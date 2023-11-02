@@ -144,6 +144,7 @@ _t = QCoreApplication.translate
 
 class WorkerThread(QThread):
     _sig_final = pyqtSignal(bool, str)
+    _sig_data = pyqtSignal(object)
     logger = logging.getLogger("WorkerThread")
 
     def __init__(
@@ -152,6 +153,7 @@ class WorkerThread(QThread):
         func: Callable,
         *args,
         on_final: Callable = None,
+        on_data: Callable = None,
         **kwargs,
     ):
         # NOTE: make sure child class consumes all their arguments
@@ -168,6 +170,8 @@ class WorkerThread(QThread):
         self._args = args
         if on_final:
             self._sig_final.connect(on_final)
+        if on_data:
+            self._sig_data.connect(on_data)
         self._kwargs = kwargs
 
     def run(self):
@@ -178,28 +182,24 @@ class WorkerThread(QThread):
             if self._sig_final:
                 self._sig_final.emit(False, str(e))
 
-            return
-
         else:
             if self._sig_final:
                 self._sig_final.emit(True, "")
 
-            return ret
+            if self._sig_data:
+                if isinstance(ret, tuple):
+                    self._sig_data.emit(*ret)
+                else:
+                    self._sig_data.emit(ret)
 
 
 class ExporterDropdownWorkerThread(WorkerThread):
     # Dict[str, List[str]]
     _sig_data = pyqtSignal(dict)
 
-    def __init__(self, *args, on_data: Callable = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        if on_data:
-            self._sig_data.connect(on_data)
 
-    def run(self):
-        ret = super().run()
-        if self._sig_data and ret:
-            self._sig_data.emit(ret)
+class CheckUpdateWorkerThread(WorkerThread):
+    _sig_data = pyqtSignal(UpdateEnum, str)
 
 
 def threaded(parent, worker_cls=WorkerThread, **kwargs):
@@ -876,66 +876,76 @@ class Window(QMainWindow, Ui_MainWindow):
         repo = self.get_repo()
         m = GithubFileForker.validate_repo(repo)
         user, repo = m.group("user"), m.group("repo")
-        try:
-            update_stat, version = gh_api.check_update(user, repo)
-        except Exception as e:
-            self._logger.warning(f"Failed to check update. Error: {e}")
-            self._logger.debug("traceback:", exc_info=True)
-            return
-        else:
+
+        def on_data(update_stat: UpdateEnum, version: str) -> None:
             self._logger.info(f"Update status: {update_stat.name}, version: {version}")
+            if update_stat == UpdateEnum.NONE:
+                return
 
-        if update_stat == UpdateEnum.NONE:
-            return
+            elif update_stat == UpdateEnum.OPTIONAL:
+                # pop up message box (update now or later)
+                msg = _t(
+                    "MainWindow",
+                    "Update to version {!s} available, "
+                    "do you want to download now?"  # fmt: skip
+                )
+                msg = msg.format(version)
+                reply = QMessageBox.question(
+                    self,
+                    _t("MainWindow", "Update Available"),
+                    msg,
+                    QMessageBox.Yes,
+                    QMessageBox.No,
+                )
 
-        elif update_stat == UpdateEnum.OPTIONAL:
-            # pop up message box (update now or later)
-            msg = _t(
-                "MainWindow",
-                "Update to version {!s} available, "
-                "do you want to download now?"  # fmt: skip
-            )
-            msg = msg.format(version)
-            reply = QMessageBox.question(
-                self,
-                _t("MainWindow", "Update Available"),
-                msg,
-                QMessageBox.Yes,
-                QMessageBox.No,
-            )
+            elif update_stat == UpdateEnum.REQUIRED:
+                # pop up message box (update needed)
+                msg = _t(
+                    "MainWindow",
+                    "Update to version {!s} required, current version is no longer "
+                    "being supported. "
+                    "Do you want to download now?"  # fmt: skip
+                )
+                msg = msg.format(version)
+                reply = QMessageBox.question(
+                    self,
+                    _t("MainWindow", "Update Required"),
+                    msg,
+                    QMessageBox.Yes,
+                    QMessageBox.No,
+                )
 
-        elif update_stat == UpdateEnum.REQUIRED:
-            # pop up message box (update needed)
-            msg = _t(
-                "MainWindow",
-                "Update to version {!s} required, current version is no longer "
-                "being supported. "
-                "Do you want to download now?"  # fmt: skip
-            )
-            msg = msg.format(version)
-            reply = QMessageBox.question(
-                self,
-                _t("MainWindow", "Update Required"),
-                msg,
-                QMessageBox.Yes,
-                QMessageBox.No,
-            )
+            if reply == QMessageBox.Yes:
+                cwd = os.getcwd()
+                path = os.path.join(cwd, f"ah-{version}.zip")
+                self.hide()
+                content = gh_api.get_build_release(user, repo, version)
+                with open(path, "wb") as f:
+                    f.write(content)
 
-        if reply == QMessageBox.Yes:
-            cwd = os.getcwd()
-            path = os.path.join(cwd, f"ah-{version}.zip")
-            self.hide()
-            content = gh_api.get_build_release(user, repo, version)
-            with open(path, "wb") as f:
-                f.write(content)
+                # open zip
+                self.browse(path)
+                # exit
+                sys.exit(0)
 
-            # open zip
-            self.browse(path)
-            # exit
-            sys.exit(0)
+            elif update_stat == UpdateEnum.REQUIRED:
+                sys.exit(0)
 
-        elif update_stat == UpdateEnum.REQUIRED:
-            sys.exit(0)
+        def on_final(success: bool, msg: str) -> None:
+            if not success:
+                self.popup_error(_t("MainWindow", "Check Update Error"), msg)
+
+        @threaded(
+            self,
+            worker_cls=CheckUpdateWorkerThread,
+            on_final=on_final,
+            on_data=on_data,
+        )
+        def task():
+            update_stat, version = gh_api.check_update(user, repo)
+            return update_stat, str(version)
+
+        task()
 
     def on_log_recieved(self, msg: str) -> None:
         # StackOverflow
