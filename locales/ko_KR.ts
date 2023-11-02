@@ -154,67 +154,67 @@
         <translation>로그</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="279"/>
+        <location filename="../ah/ui/main_controller.py" line="280"/>
         <source>Invalid Warcraft Base Path</source>
         <translation>잘못된 워크래프트 루트 경로</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="295"/>
+        <location filename="../ah/ui/main_controller.py" line="296"/>
         <source>Invalid Github Repo</source>
         <translation>잘못된 GitHub 저장소</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="311"/>
+        <location filename="../ah/ui/main_controller.py" line="312"/>
         <source>Invalid Github Proxy</source>
         <translation>잘못된 GitHub 프록시</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="331"/>
+        <location filename="../ah/ui/main_controller.py" line="332"/>
         <source>Invalid Input</source>
         <translation>잘못된 입력</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="669"/>
+        <location filename="../ah/ui/main_controller.py" line="670"/>
         <source>Remove Path</source>
         <translation>경로 삭제</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="691"/>
+        <location filename="../ah/ui/main_controller.py" line="692"/>
         <source>Browse Path</source>
         <translation>경로 찾기</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="749"/>
+        <location filename="../ah/ui/main_controller.py" line="750"/>
         <source>Select DB Path</source>
         <translation>DB 경로 선택</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="762"/>
+        <location filename="../ah/ui/main_controller.py" line="763"/>
         <source>Select Warcraft Base Path</source>
         <translation>워크래프트 루트 경로 선택</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1195"/>
+        <location filename="../ah/ui/main_controller.py" line="1219"/>
         <source>Config Error</source>
         <translation>설정 오류</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1113"/>
+        <location filename="../ah/ui/main_controller.py" line="1137"/>
         <source>Export Error</source>
         <translation>내보내기 오류</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1163"/>
+        <location filename="../ah/ui/main_controller.py" line="1187"/>
         <source>Update Error</source>
         <translation>업데이트오류</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1184"/>
+        <location filename="../ah/ui/main_controller.py" line="1208"/>
         <source>Patch TSM</source>
         <translation>TSM 패치</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1057"/>
+        <location filename="../ah/ui/main_controller.py" line="1081"/>
         <source>If you&apos;re exporting regions and realms not officially supported by TSM (like TW, KR, and some classic realms), it is recommended to patch TSM&apos;s &apos;LibRealmInfo&apos; library with the data of some newly added realms they&apos;re missing. 
 
 Missing these data can cause TSM misidentify the region of these realms, which can lead to problem loading auction data.
@@ -227,7 +227,7 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
 당신은 즉시 &apos;예&apos;를 클릭하여 패치를 진행하거나 &apos;아니오&apos;를 클릭하여 건너뛸 수 있으며 (필요한 경우 &apos;도구&apos; 탭의 &apos;LibRealmInfo 패치&apos; 버튼을 사용하여 나중에 언제든지 패치할 수 있습니다).</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1184"/>
+        <location filename="../ah/ui/main_controller.py" line="1208"/>
         <source>Patched TSM successfully!</source>
         <translation>TSM이 성공적으로 패치되었습니다!</translation>
     </message>
@@ -237,47 +237,47 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
         <translation>언어 (language)</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="599"/>
+        <location filename="../ah/ui/main_controller.py" line="600"/>
         <source>Unknown widget type for load settings: {!r}</source>
         <translation>{!r} 위젯의 설정을 로드할 수 없습니다. 해당 위젯의 유형 때문입니다.</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="609"/>
+        <location filename="../ah/ui/main_controller.py" line="610"/>
         <source>Failed to load settings for {!r}</source>
         <translation>{!r}의 설정을 불러오는 데 실패했습니다.</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="627"/>
+        <location filename="../ah/ui/main_controller.py" line="628"/>
         <source>Unknown widget type for save settings: {!r}</source>
         <translation>{!r} 위젯의 설정을 저장할 수 없습니다. 해당 위젯의 유형이 알려지지 않았습니다.</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="689"/>
+        <location filename="../ah/ui/main_controller.py" line="690"/>
         <source>{!r} does not exist.</source>
         <translation>{!r} 가 존재하지 않습니다.</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="710"/>
+        <location filename="../ah/ui/main_controller.py" line="711"/>
         <source>Locale {!r} not found!</source>
         <translation>언어 {!r}을(를) 찾을 수 없습니다!</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1253"/>
+        <location filename="../ah/ui/main_controller.py" line="1280"/>
         <source>Invalid selected tab {!r} for function &apos;get_namespace&apos;</source>
         <translation>&apos;get_namespace&apos; 함수를 위해 선택한 탭 {!r}이(가) 잘못되었습니다.</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="667"/>
+        <location filename="../ah/ui/main_controller.py" line="668"/>
         <source>Are you sure you want to remove {!r}?</source>
         <translation>{!r}을(를) 삭제하시겠습니까?</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="722"/>
+        <location filename="../ah/ui/main_controller.py" line="723"/>
         <source>Battle.net client ID, will be saved under {!r}.</source>
         <translation>배틀넷 클라이언트 ID, {!r} 아래에 저장됩니다.</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="725"/>
+        <location filename="../ah/ui/main_controller.py" line="726"/>
         <source>Battle.net client secret, will be saved under {!r}.</source>
         <translation>배틀넷 클라이언트 비밀번호, {!r} 아래에 저장됩니다.</translation>
     </message>
@@ -300,6 +300,11 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
         <location filename="../ah/ui/main_controller.py" line="903"/>
         <source>Update to version {!s} required, current version is no longer being supported. Do you want to download now?</source>
         <translation>버전 {!s}으로의 업데이트가 필요합니다. 현재 버전은 더 이상 지원되지 않습니다. 지금 다운로드 하시겠습니까?</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_controller.py" line="936"/>
+        <source>Check Update Error</source>
+        <translation>업데이트 확인 오류</translation>
     </message>
 </context>
 </TS>

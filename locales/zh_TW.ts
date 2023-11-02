@@ -154,67 +154,67 @@
         <translation>日誌</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="279"/>
+        <location filename="../ah/ui/main_controller.py" line="280"/>
         <source>Invalid Warcraft Base Path</source>
         <translation>無效的魔獸世界根路徑</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="295"/>
+        <location filename="../ah/ui/main_controller.py" line="296"/>
         <source>Invalid Github Repo</source>
         <translation>無效的GitHub儲存庫</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="311"/>
+        <location filename="../ah/ui/main_controller.py" line="312"/>
         <source>Invalid Github Proxy</source>
         <translation>無效的GitHub代理</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="331"/>
+        <location filename="../ah/ui/main_controller.py" line="332"/>
         <source>Invalid Input</source>
         <translation>無效輸入</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="669"/>
+        <location filename="../ah/ui/main_controller.py" line="670"/>
         <source>Remove Path</source>
         <translation>刪除路徑</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="691"/>
+        <location filename="../ah/ui/main_controller.py" line="692"/>
         <source>Browse Path</source>
         <translation>瀏覽路徑</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="749"/>
+        <location filename="../ah/ui/main_controller.py" line="750"/>
         <source>Select DB Path</source>
         <translation>選擇資料庫路徑</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="762"/>
+        <location filename="../ah/ui/main_controller.py" line="763"/>
         <source>Select Warcraft Base Path</source>
         <translation>選擇魔獸世界根路徑</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1195"/>
+        <location filename="../ah/ui/main_controller.py" line="1219"/>
         <source>Config Error</source>
         <translation>配置錯誤</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1113"/>
+        <location filename="../ah/ui/main_controller.py" line="1137"/>
         <source>Export Error</source>
         <translation>匯出錯誤</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1163"/>
+        <location filename="../ah/ui/main_controller.py" line="1187"/>
         <source>Update Error</source>
         <translation>更新錯誤</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1184"/>
+        <location filename="../ah/ui/main_controller.py" line="1208"/>
         <source>Patch TSM</source>
         <translation>TSM補丁</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1057"/>
+        <location filename="../ah/ui/main_controller.py" line="1081"/>
         <source>If you&apos;re exporting regions and realms not officially supported by TSM (like TW, KR, and some classic realms), it is recommended to patch TSM&apos;s &apos;LibRealmInfo&apos; library with the data of some newly added realms they&apos;re missing. 
 
 Missing these data can cause TSM misidentify the region of these realms, which can lead to problem loading auction data.
@@ -227,7 +227,7 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
 您可以立即點擊 &apos;是&apos; 進行補丁，或者點擊 &apos;否&apos; 跳過（您也可隨時使用 &apos;工具&apos; 選項卡中的 &apos;LibRealmInfo補丁&apos; 按鈕進行操作）。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1184"/>
+        <location filename="../ah/ui/main_controller.py" line="1208"/>
         <source>Patched TSM successfully!</source>
         <translation>TSM已成功補丁！</translation>
     </message>
@@ -237,47 +237,47 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
         <translation>語言 (language)</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="599"/>
+        <location filename="../ah/ui/main_controller.py" line="600"/>
         <source>Unknown widget type for load settings: {!r}</source>
         <translation>無法載入 {!r} 的設置，因為其類型未知。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="609"/>
+        <location filename="../ah/ui/main_controller.py" line="610"/>
         <source>Failed to load settings for {!r}</source>
         <translation>無法載入 {!r} 的設定。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="627"/>
+        <location filename="../ah/ui/main_controller.py" line="628"/>
         <source>Unknown widget type for save settings: {!r}</source>
         <translation>無法儲存 {!r} 的設定，因為它的類型未知。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="689"/>
+        <location filename="../ah/ui/main_controller.py" line="690"/>
         <source>{!r} does not exist.</source>
         <translation>{!r} 不存在。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="710"/>
+        <location filename="../ah/ui/main_controller.py" line="711"/>
         <source>Locale {!r} not found!</source>
         <translation>找不到語言 {!r}！</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1253"/>
+        <location filename="../ah/ui/main_controller.py" line="1280"/>
         <source>Invalid selected tab {!r} for function &apos;get_namespace&apos;</source>
         <translation>選擇的選項卡 {!r} 無效，用於 &apos;get_namespace&apos; 函數。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="667"/>
+        <location filename="../ah/ui/main_controller.py" line="668"/>
         <source>Are you sure you want to remove {!r}?</source>
         <translation>您確定要刪除 {!r} 嗎？</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="722"/>
+        <location filename="../ah/ui/main_controller.py" line="723"/>
         <source>Battle.net client ID, will be saved under {!r}.</source>
         <translation>Battle.net客戶端ID，將儲存在 {!r}。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="725"/>
+        <location filename="../ah/ui/main_controller.py" line="726"/>
         <source>Battle.net client secret, will be saved under {!r}.</source>
         <translation>Battle.net客戶端秘密，將儲存在 {!r}。</translation>
     </message>
@@ -300,6 +300,11 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
         <location filename="../ah/ui/main_controller.py" line="903"/>
         <source>Update to version {!s} required, current version is no longer being supported. Do you want to download now?</source>
         <translation>需要更新到版本 {!s}，當前版本已不再受支持。是否現在下載？</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_controller.py" line="936"/>
+        <source>Check Update Error</source>
+        <translation>檢查更新錯誤</translation>
     </message>
 </context>
 </TS>
