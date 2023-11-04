@@ -219,6 +219,7 @@ def main(
     bn_api: BNAPI = None,
 ):
     cache = cache or Cache(config.DEFAULT_CACHE_PATH)
+    cache.remove_expired()
 
     if repo:
         gh_api = gh_api or GHAPI(cache, gh_proxy)

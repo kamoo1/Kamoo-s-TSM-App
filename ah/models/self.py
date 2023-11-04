@@ -357,7 +357,7 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
         n_days_before: int,
         is_records_sorted: bool = True,
         return_compressed_record: bool = False,
-    ) -> List[Union[MarketValueRecord, float, None]]:
+    ) -> List[Union[MarketValueRecord, int, None]]:
         """
         average range is (ts_now - n_days_before * SECONDS_IN.DAY, ts_now),
         range end (ts_now) is exclusive following convention,

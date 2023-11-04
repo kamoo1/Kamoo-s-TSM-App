@@ -154,67 +154,67 @@
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="279"/>
+        <location filename="../ah/ui/main_controller.py" line="280"/>
         <source>Invalid Warcraft Base Path</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="295"/>
+        <location filename="../ah/ui/main_controller.py" line="296"/>
         <source>Invalid Github Repo</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="311"/>
+        <location filename="../ah/ui/main_controller.py" line="312"/>
         <source>Invalid Github Proxy</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="331"/>
+        <location filename="../ah/ui/main_controller.py" line="332"/>
         <source>Invalid Input</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="669"/>
+        <location filename="../ah/ui/main_controller.py" line="670"/>
         <source>Remove Path</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="691"/>
+        <location filename="../ah/ui/main_controller.py" line="692"/>
         <source>Browse Path</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="749"/>
+        <location filename="../ah/ui/main_controller.py" line="750"/>
         <source>Select DB Path</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="762"/>
+        <location filename="../ah/ui/main_controller.py" line="763"/>
         <source>Select Warcraft Base Path</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1195"/>
+        <location filename="../ah/ui/main_controller.py" line="1219"/>
         <source>Config Error</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1113"/>
+        <location filename="../ah/ui/main_controller.py" line="1137"/>
         <source>Export Error</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1163"/>
+        <location filename="../ah/ui/main_controller.py" line="1187"/>
         <source>Update Error</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1184"/>
+        <location filename="../ah/ui/main_controller.py" line="1208"/>
         <source>Patch TSM</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1057"/>
+        <location filename="../ah/ui/main_controller.py" line="1081"/>
         <source>If you&apos;re exporting regions and realms not officially supported by TSM (like TW, KR, and some classic realms), it is recommended to patch TSM&apos;s &apos;LibRealmInfo&apos; library with the data of some newly added realms they&apos;re missing. 
 
 Missing these data can cause TSM misidentify the region of these realms, which can lead to problem loading auction data.
@@ -223,7 +223,7 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1184"/>
+        <location filename="../ah/ui/main_controller.py" line="1208"/>
         <source>Patched TSM successfully!</source>
         <translation></translation>
     </message>
@@ -233,47 +233,47 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="599"/>
+        <location filename="../ah/ui/main_controller.py" line="600"/>
         <source>Unknown widget type for load settings: {!r}</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="609"/>
+        <location filename="../ah/ui/main_controller.py" line="610"/>
         <source>Failed to load settings for {!r}</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="627"/>
+        <location filename="../ah/ui/main_controller.py" line="628"/>
         <source>Unknown widget type for save settings: {!r}</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="689"/>
+        <location filename="../ah/ui/main_controller.py" line="690"/>
         <source>{!r} does not exist.</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="710"/>
+        <location filename="../ah/ui/main_controller.py" line="711"/>
         <source>Locale {!r} not found!</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1253"/>
+        <location filename="../ah/ui/main_controller.py" line="1280"/>
         <source>Invalid selected tab {!r} for function &apos;get_namespace&apos;</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="667"/>
+        <location filename="../ah/ui/main_controller.py" line="668"/>
         <source>Are you sure you want to remove {!r}?</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="722"/>
+        <location filename="../ah/ui/main_controller.py" line="723"/>
         <source>Battle.net client ID, will be saved under {!r}.</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="725"/>
+        <location filename="../ah/ui/main_controller.py" line="726"/>
         <source>Battle.net client secret, will be saved under {!r}.</source>
         <translation></translation>
     </message>
@@ -295,6 +295,11 @@ You can patch now by clicking &apos;Yes&apos; or pass by clicking &apos;No&apos;
     <message>
         <location filename="../ah/ui/main_controller.py" line="903"/>
         <source>Update to version {!s} required, current version is no longer being supported. Do you want to download now?</source>
+        <translation></translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_controller.py" line="936"/>
+        <source>Check Update Error</source>
         <translation></translation>
     </message>
 </context>

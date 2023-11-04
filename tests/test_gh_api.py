@@ -3,14 +3,19 @@ from unittest.mock import patch, Mock
 from tempfile import TemporaryDirectory
 import re
 import os
+import requests
+from urllib import parse
 
 from ah.cache import Cache
 from ah.api import GHAPI, UpdateEnum
 
 
 class MockResponse(Mock):
-    def __init__(self, content, status_code=200) -> None:
+    links = requests.Response.links
+
+    def __init__(self, content, status_code=200, headers=None) -> None:
         super().__init__()
+        self.headers = headers or {}
         self.content = content
         self.status_code = status_code
 
@@ -26,10 +31,18 @@ class MockSession(Mock):
     MATCH_RELEASES_ASSETS = re.compile(
         r"^https://api.github.com/repos/\w+/\w+/releases/\d+/assets"
     )
-    MATCH_CDN_COM = re.compile(r"^https://cdn.com/")
+    MATCH_CDN = re.compile(r"^https://example.com/cdn")
+    MATCH_PAGINATION = re.compile(r"^https://example.com/pagination")
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+
+    def request(self, method, url, **kwargs):
+        if method == "get":
+            return self.get(url, **kwargs)
+
+        else:
+            raise NotImplementedError
 
     def get(self, url: str, **kwargs):
         if self.MATCH_TAGS.match(url):
@@ -57,12 +70,27 @@ class MockSession(Mock):
                 [
                     {
                         "name": "archive.zip",
-                        "browser_download_url": "https://cdn.com/archive.zip",
+                        "browser_download_url": "https://example.com/cdn/archive.zip",
                     },
                 ]
             )
-        elif self.MATCH_CDN_COM.match(url):
+        elif self.MATCH_CDN.match(url):
             return MockResponse(b"content")
+        elif self.MATCH_PAGINATION.match(url):
+            # get url param `page` from url
+            parse_ = parse.urlparse(url)
+            query = parse.parse_qs(parse_.query)
+            page = int(query["page"][0]) if "page" in query else 1
+
+            return MockResponse(
+                [f"page-{page}-item-{i}" for i in range(10)],
+                headers={
+                    "link": f"<{parse_.scheme}://{parse_.netloc}{parse_.path}?"
+                    f'page={page + 1}>; rel="next"'
+                }
+                if page < 10
+                else {},
+            )
 
 
 class TestGHApi(TestCase):
@@ -97,3 +125,16 @@ class TestGHApi(TestCase):
 
             content = api.get_build_release("user", "repo", "v1.3.0")
             self.assertEqual(content, b"content")
+
+    def test_pagination(self):
+        temp = TemporaryDirectory()
+        with temp:
+            cache_path = os.path.join(temp.name, "cache")
+            cache = Cache(cache_path)
+            api = GHAPI(cache)
+            for i, resp in enumerate(api.paginated("https://example.com/pagination")):
+                self.assertEqual(resp.status_code, 200)
+                expected = [f"page-{i + 1}-item-{j}" for j in range(10)]
+                self.assertEqual(resp.json(), expected)
+
+            self.assertEqual(i, 9)
