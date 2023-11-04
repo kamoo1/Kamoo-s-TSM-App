@@ -36,6 +36,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        token: ${{ secrets.PAT }}
     - name: Set up Python 3.10
       uses: actions/setup-python@v3
       with:
@@ -46,9 +47,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install python-semantic-release==8.1.1 pyinstaller==6.0.0 pyqt5-tools==5.15.9.3.3
         pip install -r requirements.txt
+    # to bypass protected branch rules:
+    # https://python-semantic-release.readthedocs.io/en/latest/automatic-releases/github-actions.html#example-workflow (warnings section)
+    # https://github.com/python-semantic-release/python-semantic-release/issues/311
     - name: semantic-release
       run: |
         python -m semantic_release version
         python -m semantic_release publish
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.PAT }}
