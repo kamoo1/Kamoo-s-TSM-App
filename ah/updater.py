@@ -22,6 +22,7 @@ from ah.models import (
     MapItemStringMarketValueRecords,
     ConnectedRealm,
     Meta,
+    MarketValueRecords,
 )
 from ah.storage import BinaryFile
 from ah.db import DBHelper, GithubFileForker
@@ -107,11 +108,14 @@ class Updater:
         file: BinaryFile,
         increment: MapItemStringMarketValueRecord,
         start_ts: int,
+        ts_compressed: int = 0,
     ) -> MapItemStringMarketValueRecords:
         records = MapItemStringMarketValueRecords.from_file(file, forker=self.forker)
         n_added_records, n_added_entries = records.update_increment(increment)
         n_removed_records = records.remove_expired(start_ts - self.RECORDS_EXPIRES_IN)
-        n_removed_records += records.compress(start_ts, self.RECORDS_EXPIRES_IN)
+        n_removed_records += records.compress(
+            start_ts, self.RECORDS_EXPIRES_IN, ts_compressed=ts_compressed
+        )
         records.to_file(file)
         self._logger.info(
             f"DB update: {file!r}, {n_added_records=} "
@@ -123,6 +127,7 @@ class Updater:
         self,
         namespace: Namespace,
         connected_realm_ids: Tuple[int],
+        ts_compressed: int = 0,
     ) -> Tuple[int, int]:
         """update auction / commodities records for every connected realm under
         this region
@@ -150,13 +155,17 @@ class Updater:
                     crid=crid,
                     faction=faction,
                 )
-                self.save_increment(file, increment, start_ts)
+                self.save_increment(
+                    file, increment, start_ts, ts_compressed=ts_compressed
+                )
 
         if namespace.game_version == GameVersionEnum.RETAIL:
             increment = self.pull_increment(namespace)
             if increment:
                 file = self.db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
-                self.save_increment(file, increment, start_ts)
+                self.save_increment(
+                    file, increment, start_ts, ts_compressed=ts_compressed
+                )
 
         # just in case we're in the same ts as the increment, which cause
         # `MarketValueRecords.average_by_day` to ignore the increment record
@@ -196,14 +205,20 @@ class Updater:
     def update_region(self, namespace: Namespace) -> None:
         sys_info = SysInfo()
         sys_info.begin_monitor()
+        # get compress time from last start_ts
+        meta_file = self.db_helper.get_file(namespace, DBTypeEnum.META)
+        meta = Meta.from_file(meta_file, forker=self.forker)
+        ts_compressed = MarketValueRecords.get_compress_end_ts(
+            meta.get_update_ts()[0] or 0
+        )
+        # create latest meta
         meta = self.pull_region_meta(namespace)
         start_ts, end_ts = self.update_region_records(
-            namespace, meta.get_connected_realm_ids()
+            namespace, meta.get_connected_realm_ids(), ts_compressed=ts_compressed
         )
         meta.set_update_ts(start_ts, end_ts)
         sys_info.stop_monitor()
         meta.set_system(sys_info.get_sysinfo())
-        meta_file = self.db_helper.get_file(namespace, DBTypeEnum.META)
         meta.to_file(meta_file)
 
 

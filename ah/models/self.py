@@ -288,20 +288,26 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
     def empty(self):
         self.__root__ = []
 
-    def compress(self, ts_now: int, ts_expires_in: int) -> int:
+    @classmethod
+    def get_compress_end_ts(cls, ts_now: int) -> int:
+        # round down to the end of last UTC day
+        return ts_now - ts_now % SECONDS_IN.DAY
+
+    def compress(self, ts_now: int, ts_expires_in: int, ts_compressed: int = 0) -> int:
         """average all records in the range of 1 day down to 1 record,
         the average sample range is `[mid_day - 12hr, mid_day + 12hr]`
         the averaged record's timestamp is the mid_day.
         """
         # keep recent records that didn't span over a day
-        ts_end = ts_now - ts_now % SECONDS_IN.DAY
+        ts_end = self.get_compress_end_ts(ts_now)
         # round up so we don't miss any records
         n_days = (ts_expires_in + SECONDS_IN.DAY - 1) // SECONDS_IN.DAY
         comporessed_records = self.average_by_day(
             self,
             ts_end,
             n_days,
-            return_compressed_record=True,
+            return_mvr=True,
+            ts_compressed=ts_compressed,
         )
         comporessed_records = (
             record for record in comporessed_records if record is not None
@@ -355,18 +361,36 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
         records: "MarketValueRecords",
         ts_now: int,
         n_days_before: int,
-        is_records_sorted: bool = True,
-        return_compressed_record: bool = False,
+        return_mvr: bool = False,
+        ts_compressed: int = 0,
     ) -> List[Union[MarketValueRecord, int, None]]:
         """
-        average range is (ts_now - n_days_before * SECONDS_IN.DAY, ts_now),
-        range end (ts_now) is exclusive following convention,
-        records with timestamp >= ts_now are ignored.
+        records must be sorted in ascending order by timestamp before calling this
+        method, otherwise the result will be incorrect.
 
-        note that records should be passed in ascending order
+        :param records: records to be averaged
+        :param ts_now: ending timestamp for averaging, that is,
+               from `ts_now - n_days_before * SECONDS_IN.DAY` (inclusive)
+               to `ts_now` (exclusive)
+        :param n_days_before: number of days (buckets) to average the records into
+        :param return_mvr: whether to return a list of `MarketValueRecord`, instead
+               of a list of averaged market value
+        :param ts_compressed: timestamp marking the end of the compressed period,
+               meaning all records earlier than this timestamp already has been
+               averaged into one record per day. we use this to avoid averaging
+               records that are already averaged.
+
         """
-        # 1. put market value snapshots into buckets of 1 day
+
+        """
+        1.  put records into buckets of 1 day, later averaging each bucket into 
+            one record or market value. iterating records in descending order. 
+            records that were already averaged (compressed) are skipped for the 
+            sake of performance.
+        """
+
         buckets = defaultdict(list)
+        skipped = dict()
         for record in reversed(records):
             if record.market_value is None:
                 continue
@@ -376,17 +400,29 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
                 continue
 
             elif i < n_days_before:
-                buckets[i].append(record)
+                # if a record is within range of the first day, we'd average it
+                # regardless it's already compressed or not.
+                # because *average range* of a compressed record is snapped to
+                # UTC day, that means the range starts and ends exactly at
+                # `n * SECONDS_IN.DAY`.
+                # if we're averaging again here with *average range* not snapped
+                # to UTC day, then there might be newer records that needs to be
+                # averaged into the first compressed record.
+                if record.timestamp >= ts_compressed or i == 0:
+                    buckets[i].append(record)
+                else:
+                    skipped[i] = record
 
-            elif is_records_sorted:
-                # if records are sorted in descending order, we can stop
-                # processing them when we reach the first record that is
-                # older than `n_days_before`
+            else:
+                # because records are sorted, we can stop processing them when we
+                # reach the first record that is older than `n_days_before`
                 break
 
-        # 2. average each bucket so we get averaged market value for each day
-        #    note that some buckets may be empty, indicated by `None` instead
-        #    of an average.
+        """
+        2.  average each bucket so we get averaged market value for each day
+            note that some buckets may be empty, indicated by `None` instead
+            of an average.
+        """
         days_average = [None] * n_days_before
         for i, records in buckets.items():
             if not records:
@@ -397,7 +433,7 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
             avg_market_value = sum(r.market_value for r in records) / n_records
             avg_market_value = int(avg_market_value + 0.5)
 
-            if return_compressed_record:
+            if return_mvr:
                 avg_num_auctions = sum(r.num_auctions for r in records) / n_records
                 avg_num_auctions = int(avg_num_auctions + 0.5)
                 min_min_buyout = min(record.min_buyout for record in records)
@@ -412,9 +448,24 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
             else:
                 days_average[day] = avg_market_value
 
+        """
+        3.  add compressed records that are in range but were skipped in step 1
+        """
+        for i, record in skipped.items():
+            day = n_days_before - i - 1
+            if return_mvr:
+                days_average[day] = MarketValueRecord(
+                    timestamp=record.timestamp,
+                    market_value=record.market_value,
+                    num_auctions=record.num_auctions,
+                    min_buyout=record.min_buyout,
+                )
+            else:
+                days_average[day] = record.market_value
+
         return days_average
 
-    def get_historical_market_value(self, ts_now: int) -> int:
+    def get_historical_market_value(self, ts_now: int, ts_compressed: int = 0) -> int:
         # TSM says it's a 60-day average of "weighted market value", I'm just
         # getting lazy here using average of records instead.
 
@@ -428,7 +479,10 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
             )
             return 0
         days_average = self.average_by_day(
-            self, ts_now, self.HISTORICAL_DAYS, is_records_sorted=True
+            self,
+            ts_now,
+            self.HISTORICAL_DAYS,
+            ts_compressed=ts_compressed,
         )
         # calculate average of all buckets that are not None
         sum_market_value = 0
@@ -446,7 +500,7 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
 
         return int(sum_market_value / n_days + 0.5)
 
-    def get_weighted_market_value(self, ts_now: int) -> int:
+    def get_weighted_market_value(self, ts_now: int, ts_compressed: int = 0) -> int:
         if not self:
             self._logger.debug(
                 f"{self}: no records, get_weighted_market_value() returns 0"
@@ -454,7 +508,10 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
             return 0
 
         days_average = self.average_by_day(
-            self, ts_now, len(self.DAY_WEIGHTS), is_records_sorted=True
+            self,
+            ts_now,
+            len(self.DAY_WEIGHTS),
+            ts_compressed=ts_compressed,
         )
         # calculate weighted average over all buckets that are not None
         sum_market_value = 0
@@ -1092,10 +1149,13 @@ class MapItemStringMarketValueRecords(_RootDictMixin[ItemString, MarketValueReco
         self,
         ts_now: int,
         ts_expires_in: int,
+        ts_compressed: int = 0,
     ) -> int:
         n_removed = 0
         for market_value_records in self.values():
-            n_removed += market_value_records.compress(ts_now, ts_expires_in)
+            n_removed += market_value_records.compress(
+                ts_now, ts_expires_in, ts_compressed=ts_compressed
+            )
 
         return n_removed
 

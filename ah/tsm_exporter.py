@@ -15,6 +15,7 @@ from ah.models import (
     DBTypeEnum,
     FactionEnum,
     Meta,
+    MarketValueRecords,
 )
 from ah.storage import TextFile
 from ah.db import DBHelper, GithubFileForker
@@ -179,6 +180,7 @@ class TSMExporter:
         ts_update_end: int,
     ) -> None:
         cls._logger.info(f"Exporting {type_} for {region_or_realm}...")
+        ts_compressed = MarketValueRecords.get_compress_end_ts(ts_update_begin)
         items_data = []
         for item_string, records in map_records.items():
             # tsm can handle:
@@ -201,11 +203,15 @@ class TSMExporter:
                     if value:
                         is_skip_item = False
                 elif field in ["historical", "regionHistorical"]:
-                    value = records.get_historical_market_value(ts_update_end)
+                    value = records.get_historical_market_value(
+                        ts_update_end, ts_compressed=ts_compressed
+                    )
                     if value:
                         is_skip_item = False
                 elif field in ["marketValue", "regionMarketValue"]:
-                    value = records.get_weighted_market_value(ts_update_end)
+                    value = records.get_weighted_market_value(
+                        ts_update_end, ts_compressed=ts_compressed
+                    )
                     if value:
                         is_skip_item = False
                 elif field == "itemString":
