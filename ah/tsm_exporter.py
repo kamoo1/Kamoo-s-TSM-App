@@ -405,7 +405,7 @@ class TSMExporter:
             # need to sort because it's records are from multiple realms
             # note that we skipped `realm_auctions_commodities_data`, due to
             # no overlapping item strings between auctions and commodities
-            data = data.sort()
+            data.sort()
             for region_export in self.REGION_AUCTIONS_COMMODITIES_EXPORTS:
                 # reset `ts_compressed` because the result
                 self.export_append_data(
