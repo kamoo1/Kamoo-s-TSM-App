@@ -178,9 +178,13 @@ class TSMExporter:
         region_or_realm: str,
         ts_update_begin: int,
         ts_update_end: int,
+        should_reset_tsc: bool = False,
     ) -> None:
         cls._logger.info(f"Exporting {type_} for {region_or_realm}...")
-        ts_compressed = MarketValueRecords.get_compress_end_ts(ts_update_begin)
+        if should_reset_tsc:
+            ts_compressed = 0
+        else:
+            ts_compressed = MarketValueRecords.get_compress_end_ts(ts_update_begin)
         items_data = []
         for item_string, records in map_records.items():
             # tsm can handle:
@@ -274,7 +278,7 @@ class TSMExporter:
             raise ValueError(f"unavailable realms : {export_realms - all_realms}. ")
 
         # determines if we need to export hc / non-hc reagional data
-        is_exp_regional_hc = is_exp_regional_non_hc = False
+        should_export_hc_regional = should_export_non_hc_regional = False
         # collect all auction data (non-hc) under this region
         region_auctions_commodities_data = MapItemStringMarketValueRecords()
         # only hc auction data under this region, prices will be vastly different
@@ -338,8 +342,8 @@ class TSMExporter:
                 if not sub_export_realms:
                     continue
                 else:
-                    is_exp_regional_hc = is_exp_regional_hc or is_hc
-                    is_exp_regional_non_hc = is_exp_regional_non_hc or not is_hc
+                    should_export_hc_regional = should_export_hc_regional or is_hc
+                    should_export_non_hc_regional = should_export_non_hc_regional or not is_hc
 
                 if commodity_data:
                     realm_auctions_commodities_data = MapItemStringMarketValueRecords()
@@ -380,10 +384,10 @@ class TSMExporter:
             if not data:
                 continue
 
-            if is_hc_ and not is_exp_regional_hc:
+            if is_hc_ and not should_export_hc_regional:
                 continue
 
-            if not is_hc_ and not is_exp_regional_non_hc:
+            if not is_hc_ and not should_export_non_hc_regional:
                 continue
 
             region = namespace.region.upper()
@@ -403,14 +407,16 @@ class TSMExporter:
             # no overlapping item strings between auctions and commodities
             data = data.sort()
             for region_export in self.REGION_AUCTIONS_COMMODITIES_EXPORTS:
+                # reset `ts_compressed` because the result
                 self.export_append_data(
                     self.export_file,
-                    region_auctions_commodities_data,
+                    data,
                     region_export["fields"],
                     region_export["type"],
                     tsm_region,
                     ts_update_start,
                     ts_update_end,
+                    should_reset_tsc=True,
                 )
 
         self.export_append_app_info(self.export_file, self.TSM_VERSION, ts_update_end)
