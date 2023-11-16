@@ -1,11 +1,10 @@
+import re
 import sys
+import time
 import logging
 import argparse
-import time
 from logging import getLogger
 from typing import Optional, Tuple
-import re
-
 from requests.exceptions import HTTPError
 
 from ah.api import BNAPI, GHAPI
@@ -109,12 +108,24 @@ class Updater:
         increment: MapItemStringMarketValueRecord,
         start_ts: int,
         ts_compressed: int = 0,
+        is_tsc_local: bool = False,
     ) -> MapItemStringMarketValueRecords:
+        if file.exists() != is_tsc_local:
+            # db file and db compress ts locality does not match
+            self._logger.info(
+                f"DB & compress ts locality mismatch, `ts_compress` set to 0: "
+                f"{is_tsc_local=!r}, "
+                f"{file!r}.exists()={file.exists()!r}"
+            )
+            ts_compressed = 0
+
         records = MapItemStringMarketValueRecords.from_file(file, forker=self.forker)
         n_added_records, n_added_entries = records.update_increment(increment)
         n_removed_records = records.remove_expired(start_ts - self.RECORDS_EXPIRES_IN)
         n_removed_records += records.compress(
-            start_ts, self.RECORDS_EXPIRES_IN, ts_compressed=ts_compressed
+            start_ts,
+            self.RECORDS_EXPIRES_IN,
+            ts_compressed=ts_compressed,
         )
         records.to_file(file)
         self._logger.info(
@@ -128,6 +139,7 @@ class Updater:
         namespace: Namespace,
         connected_realm_ids: Tuple[int],
         ts_compressed: int = 0,
+        is_tsc_local: bool = False,
     ) -> Tuple[int, int]:
         """update auction / commodities records for every connected realm under
         this region
@@ -156,7 +168,11 @@ class Updater:
                     faction=faction,
                 )
                 self.save_increment(
-                    file, increment, start_ts, ts_compressed=ts_compressed
+                    file,
+                    increment,
+                    start_ts,
+                    ts_compressed=ts_compressed,
+                    is_tsc_local=is_tsc_local,
                 )
 
         if namespace.game_version == GameVersionEnum.RETAIL:
@@ -164,7 +180,11 @@ class Updater:
             if increment:
                 file = self.db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
                 self.save_increment(
-                    file, increment, start_ts, ts_compressed=ts_compressed
+                    file,
+                    increment,
+                    start_ts,
+                    ts_compressed=ts_compressed,
+                    is_tsc_local=is_tsc_local,
                 )
 
         # just in case we're in the same ts as the increment, which cause
@@ -207,14 +227,22 @@ class Updater:
         sys_info.begin_monitor()
         # get compress time from last start_ts
         meta_file = self.db_helper.get_file(namespace, DBTypeEnum.META)
+        if meta_file.exists():
+            is_tsc_local = True
+        else:
+            is_tsc_local = False
         meta = Meta.from_file(meta_file, forker=self.forker)
         ts_compressed = MarketValueRecords.get_compress_end_ts(
             meta.get_update_ts()[0] or 0
         )
+
         # create latest meta
         meta = self.pull_region_meta(namespace)
         start_ts, end_ts = self.update_region_records(
-            namespace, meta.get_connected_realm_ids(), ts_compressed=ts_compressed
+            namespace,
+            meta.get_connected_realm_ids(),
+            ts_compressed=ts_compressed,
+            is_tsc_local=is_tsc_local,
         )
         meta.set_update_ts(start_ts, end_ts)
         sys_info.stop_monitor()

@@ -16,11 +16,15 @@ from ah.models import (
     DBTypeEnum,
     RegionEnum,
     Realm,
+    Meta,
+    DBFileName,
 )
 from ah.db import DBHelper
 from ah.updater import main as updater_main, parse_args as updater_parse_args
 from ah.tsm_exporter import main as exporter_main, parse_args as exporter_parse_args
 from ah.fs import ensure_path
+from ah.defs import SECONDS_IN
+from ah.storage import BinaryFile
 
 
 class DummyAPIWrapper:
@@ -485,3 +489,146 @@ class TestWorkflow(TestCase):
             ]
             for expected, count in expected_occurances:
                 self.assertEqual(content.count(expected), count)
+
+    @mock.patch("time.time")
+    @mock.patch.object(MapItemStringMarketValueRecords, "update_increment")
+    @mock.patch.object(MapItemStringMarketValueRecords, "remove_expired")
+    @mock.patch.object(MapItemStringMarketValueRecords, "compress")
+    def test_updater_ts_compressed_locality_meta_local(self, m1, m2, m3, m4):
+        m1.return_value = 1  # compress
+        m2.return_value = 1  # remove_expired
+        m3.return_value = (1, 1)  # update_increment
+        m4.return_value = SECONDS_IN.DAY * 2  # time.time
+
+        """if `ts_compressed` coming from local meta file, then remote db file's
+        `ts_compressed` should be 0
+        """
+        temp = TemporaryDirectory()
+        meta_file_path = f"{temp.name}/dynamic-us_meta.json"
+        meta_file_name = os.path.basename(meta_file_path)
+
+        db_file_path = f"{temp.name}/dynamic-us_auctions_1.gz"
+        db_file_name = os.path.basename(db_file_path)
+
+        db_helper = DBHelper(temp.name)
+        updater = Updater(DummyAPIWrapper(), db_helper, forker=mock.MagicMock())
+        with temp:
+            # create local meta and local db (crid=1)
+            # crid 2 & commodities will be remote
+            meta = Meta()
+            meta.set_update_ts(SECONDS_IN.DAY + 1000, SECONDS_IN.DAY + 2000)
+            meta_fn = DBFileName.from_str(meta_file_name)
+            meta_file = db_helper.get_file(
+                meta_fn.namespace,
+                meta_fn.db_type,
+                crid=meta_fn.crid,
+                faction=meta_fn.faction,
+            )
+            meta.to_file(meta_file)
+            db = MapItemStringMarketValueRecords()
+            db_fn = DBFileName.from_str(db_file_name)
+            db_file = db_helper.get_file(
+                db_fn.namespace,
+                db_fn.db_type,
+                crid=db_fn.crid,
+                faction=db_fn.faction,
+            )
+            db.to_file(db_file)
+
+            ns = Namespace.from_str("dynamic-us")
+            updater.update_region(ns)
+
+            self.assertEqual(3, m1.call_count)
+            m1.assert_has_calls(
+                [
+                    # crid=1 (local db)
+                    mock.call(
+                        SECONDS_IN.DAY * 2,
+                        Updater.RECORDS_EXPIRES_IN,
+                        ts_compressed=SECONDS_IN.DAY,
+                    ),
+                    # crid=2 (forked remote db)
+                    mock.call(
+                        SECONDS_IN.DAY * 2,
+                        Updater.RECORDS_EXPIRES_IN,
+                        ts_compressed=0,
+                    ),
+                    # commodities (forked remote db)
+                    mock.call(
+                        SECONDS_IN.DAY * 2,
+                        Updater.RECORDS_EXPIRES_IN,
+                        ts_compressed=0,
+                    ),
+                ]
+            )
+
+    @mock.patch("time.time")
+    @mock.patch.object(MapItemStringMarketValueRecords, "update_increment")
+    @mock.patch.object(MapItemStringMarketValueRecords, "remove_expired")
+    @mock.patch.object(MapItemStringMarketValueRecords, "compress")
+    def test_updater_ts_compressed_locality_meta_remote(self, m1, m2, m3, m4):
+        m1.return_value = 1  # compress
+        m2.return_value = 1  # remove_expired
+        m3.return_value = (1, 1)  # update_increment
+        m4.return_value = SECONDS_IN.DAY * 2  # time.time
+
+        """if `ts_compressed` coming from remote db file, then local db file's
+        `ts_compressed` should be 0
+        """
+        temp = TemporaryDirectory()
+        db_file_path = f"{temp.name}/dynamic-us_auctions_1.gz"
+        db_file_name = os.path.basename(db_file_path)
+
+        db_helper = DBHelper(temp.name)
+        forker = mock.MagicMock()
+
+        def ensure_file(file):
+            if isinstance(file, BinaryFile):
+                MapItemStringMarketValueRecords().to_file(file)
+            else:
+                meta = Meta()
+                meta.set_update_ts(SECONDS_IN.DAY + 1000, SECONDS_IN.DAY + 2000)
+                meta.to_file(file)
+
+        forker.ensure_file.side_effect = ensure_file
+        updater = Updater(DummyAPIWrapper(), db_helper, forker=forker)
+        with temp:
+            # create local db (crid=1)
+            # crid 2 & commodities will be remote
+            # meta file will be remote
+            db = MapItemStringMarketValueRecords()
+            db_fn = DBFileName.from_str(db_file_name)
+            db_file = db_helper.get_file(
+                db_fn.namespace,
+                db_fn.db_type,
+                crid=db_fn.crid,
+                faction=db_fn.faction,
+            )
+            db.to_file(db_file)
+
+            ns = Namespace.from_str("dynamic-us")
+            updater.update_region(ns)
+
+            self.assertEqual(3, m1.call_count)
+            m1.assert_has_calls(
+                [
+                    # crid=1 (local db)
+                    mock.call(
+                        SECONDS_IN.DAY * 2,
+                        Updater.RECORDS_EXPIRES_IN,
+                        ts_compressed=0,
+                    ),
+                    # crid=2 (forked remote db)
+                    mock.call(
+                        SECONDS_IN.DAY * 2,
+                        Updater.RECORDS_EXPIRES_IN,
+                        ts_compressed=SECONDS_IN.DAY,
+                    ),
+                    # commodities (forked remote db)
+                    mock.call(
+                        SECONDS_IN.DAY * 2,
+                        Updater.RECORDS_EXPIRES_IN,
+                        ts_compressed=SECONDS_IN.DAY,
+                    ),
+                ]
+            )
