@@ -112,8 +112,11 @@ class Updater:
     ) -> MapItemStringMarketValueRecords:
         if file.exists() != is_tsc_local:
             # db file and db compress ts locality does not match
-            self._logger.info(
-                f"DB & compress ts locality mismatch, `ts_compress` set to 0: "
+            # note in case of local mode + meta miss + data miss, the locality of
+            # meta and data did match. but `ts_compress` is still 0 due to blank
+            # `Meta`, due to local miss and forker is `None`.
+            self._logger.debug(
+                "`ts_compress` set to 0: "
                 f"{is_tsc_local=!r}, "
                 f"{file!r}.exists()={file.exists()!r}"
             )
@@ -232,9 +235,12 @@ class Updater:
         else:
             is_tsc_local = False
         meta = Meta.from_file(meta_file, forker=self.forker)
-        ts_compressed = MarketValueRecords.get_compress_end_ts(
-            meta.get_update_ts()[0] or 0
-        )
+        last_start_ts = meta.get_update_ts()[0]
+        if last_start_ts:
+            ts_compressed = MarketValueRecords.get_compress_end_ts(last_start_ts)
+        else:
+            self._logger.debug("meta file does not exist, set `ts_compress` to 0")
+            ts_compressed = 0
 
         # create latest meta
         meta = self.pull_region_meta(namespace)

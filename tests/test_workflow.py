@@ -494,7 +494,25 @@ class TestWorkflow(TestCase):
     @mock.patch.object(MapItemStringMarketValueRecords, "update_increment")
     @mock.patch.object(MapItemStringMarketValueRecords, "remove_expired")
     @mock.patch.object(MapItemStringMarketValueRecords, "compress")
-    def test_updater_ts_compressed_locality_meta_local(self, m1, m2, m3, m4):
+    def test_updater_ts_compressed_remote_mode_meta_hit(self, m1, m2, m3, m4):
+        """
+        local mode (forker is None):
+                    | data hit  | data miss
+        ----------------------------------------
+        meta hit    | tsc=local | ts=0
+        meta miss   | tsc=0     | ts=0
+
+        note that for meta miss + data miss case, tsc (`ts_compress`)
+        did not set to 0 during `save_increment` call, it was set to 0
+        in `update_region` as default value.
+
+        remote mode (forker is not None):
+                    | data hit      | data miss
+        ----------------------------------------
+        meta hit    | ts=local      | ts=0
+        meta miss   | ts=0          | ts=remote
+
+        """
         m1.return_value = 1  # compress
         m2.return_value = 1  # remove_expired
         m3.return_value = (1, 1)  # update_increment
@@ -566,7 +584,7 @@ class TestWorkflow(TestCase):
     @mock.patch.object(MapItemStringMarketValueRecords, "update_increment")
     @mock.patch.object(MapItemStringMarketValueRecords, "remove_expired")
     @mock.patch.object(MapItemStringMarketValueRecords, "compress")
-    def test_updater_ts_compressed_locality_meta_remote(self, m1, m2, m3, m4):
+    def test_updater_ts_compressed_remote_mode_meta_miss(self, m1, m2, m3, m4):
         m1.return_value = 1  # compress
         m2.return_value = 1  # remove_expired
         m3.return_value = (1, 1)  # update_increment
