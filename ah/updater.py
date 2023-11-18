@@ -266,7 +266,7 @@ def main(
 
     if repo:
         gh_api = gh_api or GHAPI(cache, gh_proxy)
-        forker = GithubFileForker(db_path, repo, gh_api)
+        forker = GithubFileForker(repo, gh_api)
     else:
         forker = None
 
