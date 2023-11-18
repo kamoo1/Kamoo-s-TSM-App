@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QCheckBox,
     QComboBox,
+    QApplication,
 )
 from PyQt5.QtGui import (
     QValidator,
@@ -709,6 +710,11 @@ class Window(QMainWindow, Ui_MainWindow):
         else:
             subprocess.Popen(["xdg-open", path])
 
+    def notify_user(self):
+        app = QApplication.instance()
+        app.alert(self)
+        app.beep()
+
     def load_locale_by_name(self, l_name: str):
         if l_name not in LH.map_name_code:
             msg = _t("MainWindow", "Locale {!r} not found!")
@@ -1158,6 +1164,8 @@ class Window(QMainWindow, Ui_MainWindow):
 
             if not success:
                 self.popup_error(_t("MainWindow", "Export Error"), msg)
+            
+            self.notify_user()
 
         @threaded(self, on_final=on_final)
         def task(*args, **kwargs):
@@ -1201,7 +1209,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 widget.setEnabled(True)
             return
 
-        def on_task_done(success: bool, msg: str) -> None:
+        def on_final(success: bool, msg: str) -> None:
             # unlock widgets
             for widget in self._lock_on_update:
                 widget.setEnabled(True)
@@ -1209,7 +1217,9 @@ class Window(QMainWindow, Ui_MainWindow):
             if not success:
                 self.popup_error(_t("MainWindow", "Update Error"), msg)
 
-        @threaded(self, on_final=on_task_done)
+            self.notify_user()
+
+        @threaded(self, on_final=on_final)
         def task(*args, **kwargs):
             for region, game_version in combos:
                 updater_main(
