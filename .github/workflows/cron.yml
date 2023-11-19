@@ -65,7 +65,7 @@ jobs:
       with:
         tag_name: latest
         files: |
-          ${{ env.DB_PATH }}/*.gz
-          ${{ env.DB_PATH }}/*.bin
-          ${{ env.DB_PATH }}/*.json
+          ${{ env.DB_PATH }}/*{tw,kr}*.gz
+          ${{ env.DB_PATH }}/*{tw,kr}*.bin
+          ${{ env.DB_PATH }}/*{tw,kr}*.json
         name: DB ${{ env.JOB_START_TS }}
