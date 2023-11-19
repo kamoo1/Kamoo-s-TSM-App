@@ -55,8 +55,7 @@ jobs:
       run: >
         printf %s\\n 
         retail tw classic tw classic_wlk tw 
-        retail kr classic kr classic_wlk kr 
-        classic us classic eu | 
+        retail kr classic kr classic_wlk kr |
         xargs -n2 
         python -m ah.updater 
         --db_path ${{ env.DB_PATH }} 
