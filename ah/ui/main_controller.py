@@ -112,7 +112,7 @@ DEFAULT_SETTINGS = (
     ),
     (
         "settings/repo",
-        "https://github.com/kamoo1/TSM-Backend",
+        "https://github.com/kamoo1/Kamoo-s-TSM-App",
         "lineEdit_settings_repo",
     ),
     (
