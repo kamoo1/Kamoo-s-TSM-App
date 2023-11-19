@@ -185,7 +185,7 @@ class TestAuctionDB(TestCase):
         )
 
         db_helper = DBHelper(db_path)
-        forker = GithubFileForker(db_path, fork_repo, gh_api)
+        forker = GithubFileForker(fork_repo, gh_api)
         self.assert_db(
             db_helper,
             category,
@@ -272,7 +272,7 @@ class TestAuctionDB(TestCase):
             faction=faction,
         )
         db_helper = DBHelper(db_path)
-        forker = GithubFileForker(db_path, fork_repo, gh_api)
+        forker = GithubFileForker(fork_repo, gh_api)
         self.assert_db(
             db_helper,
             category,
@@ -410,7 +410,7 @@ class TestAuctionDB(TestCase):
             region=region,
         )
         db_helper = DBHelper(db_path)
-        forker = GithubFileForker(db_path, fork_repo, gh_api)
+        forker = GithubFileForker(fork_repo, gh_api)
         self.assert_db(
             db_helper,
             category,

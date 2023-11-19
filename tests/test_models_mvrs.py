@@ -16,7 +16,7 @@ class TestModels(TestCase):
         AVERAGE_WINDOW = 10
         records = MarketValueRecords()
         # 4 records per day
-        record_list = (
+        record_list = [
             MarketValueRecord(
                 timestamp=SECONDS_IN.DAY * (i / RECORDS_PER_DAY),
                 market_value=100 * ((i + RECORDS_PER_DAY) // RECORDS_PER_DAY),
@@ -24,7 +24,7 @@ class TestModels(TestCase):
                 min_buyout=1,
             )
             for i in range(RECORDED_DAYS * RECORDS_PER_DAY)
-        )
+        ]
         for mvr in record_list:
             records.add(mvr, sort=False)
 
@@ -33,7 +33,6 @@ class TestModels(TestCase):
             # now = day 20
             SECONDS_IN.DAY * RECORDED_DAYS,
             AVERAGE_WINDOW,
-            is_records_sorted=True,
         )
         self.assertListEqual(
             avgs,
@@ -56,7 +55,6 @@ class TestModels(TestCase):
             # now = day 10
             SECONDS_IN.DAY * AVERAGE_WINDOW,
             AVERAGE_WINDOW,
-            is_records_sorted=True,
         )
         self.assertListEqual(
             avgs,
@@ -72,7 +70,6 @@ class TestModels(TestCase):
             # now = day 20
             SECONDS_IN.DAY * RECORDED_DAYS,
             AVERAGE_WINDOW,
-            is_records_sorted=True,
         )
         avgs_expected = [
             1100.0,
@@ -88,26 +85,244 @@ class TestModels(TestCase):
         ]
         self.assertListEqual(avgs, avgs_expected)
 
-        # disrupt the order
-        size = len(records)
-        records.__root__ = records.__root__[size // 2 :] + records.__root__[: size // 2]
-        avgs_false = MarketValueRecords.average_by_day(
-            records,
-            # now = day 20
-            SECONDS_IN.DAY * RECORDED_DAYS,
-            AVERAGE_WINDOW,
-            is_records_sorted=True,
-        )
-        self.assertNotEqual(avgs, avgs_false)
+        # reset records
+        records.__root__ = []
+        for mvr in record_list:
+            records.add(mvr, sort=False)
 
-        avgs_true = MarketValueRecords.average_by_day(
+        # compress first two days
+        COMPRESSED_DAYS = 2
+        ts_compressed = SECONDS_IN.DAY * COMPRESSED_DAYS
+        n_removed = records.compress(ts_compressed, SECONDS_IN.DAY * COMPRESSED_DAYS)
+        self.assertEqual(n_removed, COMPRESSED_DAYS * (RECORDS_PER_DAY - 1))
+        self.assertEqual(
+            len(records),
+            (RECORDED_DAYS - COMPRESSED_DAYS) * RECORDS_PER_DAY + COMPRESSED_DAYS,
+        )
+
+        # average 20 days, inc. 2 compressed days
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 20
+            SECONDS_IN.DAY * RECORDED_DAYS,
+            RECORDED_DAYS,
+            ts_compressed=ts_compressed,
+        )
+        avgs_expected = [100.0 * (i + 1) for i in range(RECORDED_DAYS)]
+        self.assertEqual(avgs, avgs_expected)
+
+        # average 20 days, inc. 2 compressed days
+        # make sure the same when ts_compressed = 0
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 20
+            SECONDS_IN.DAY * RECORDED_DAYS,
+            RECORDED_DAYS,
+            ts_compressed=0,
+        )
+        avgs_expected = [100.0 * (i + 1) for i in range(RECORDED_DAYS)]
+        self.assertEqual(avgs, avgs_expected)
+
+        # average 10 days, inc. 2 compressed days
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 10
+            SECONDS_IN.DAY * AVERAGE_WINDOW,
+            AVERAGE_WINDOW,
+            ts_compressed=ts_compressed,
+        )
+        avgs_expected = [100.0 * (i + 1) for i in range(AVERAGE_WINDOW)]
+        self.assertEqual(avgs, avgs_expected)
+
+        # average 10 days, inc. 1 compressed days
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 11
+            SECONDS_IN.DAY * (AVERAGE_WINDOW + 1),
+            AVERAGE_WINDOW,
+            ts_compressed=ts_compressed,
+        )
+        avgs_expected = [100 + 100.0 * (i + 1) for i in range(AVERAGE_WINDOW)]
+        self.assertEqual(avgs, avgs_expected)
+
+        # average last 10 days, none of them are compressed
+        # asking for mvrs
+        avgs = MarketValueRecords.average_by_day(
             records,
             # now = day 20
             SECONDS_IN.DAY * RECORDED_DAYS,
             AVERAGE_WINDOW,
-            is_records_sorted=False,
+            return_mvr=True,
+            ts_compressed=ts_compressed,
         )
-        self.assertListEqual(avgs, avgs_true)
+        avgs_expected = [1000.0 + 100.0 * (i + 1) for i in range(AVERAGE_WINDOW)]
+        tss_expected = [
+            # 10 days before + nth day + 0.5 day
+            10 * SECONDS_IN.DAY + i * SECONDS_IN.DAY + 0.5 * SECONDS_IN.DAY
+            for i in range(10)
+        ]
+        for avg, avg_expected, ts_expected in zip(avgs, avgs_expected, tss_expected):
+            self.assertEqual(avg.market_value, avg_expected)
+            self.assertEqual(avg.num_auctions, 100)
+            self.assertEqual(avg.min_buyout, 1)
+            self.assertEqual(avg.timestamp, ts_expected)
+
+        # reset records
+        records = MarketValueRecords()
+        for mvr in record_list:
+            records.add(mvr, sort=False)
+
+        # expire 10 oldest records, then compress first 3 days
+        COMPRESSED_DAYS = 3
+        ts_compressed = SECONDS_IN.DAY * (COMPRESSED_DAYS + 10)
+        n_removed = records.compress(ts_compressed, SECONDS_IN.DAY * COMPRESSED_DAYS)
+        # make backup after compressing
+        records_backup = deepcopy(records)
+        self.assertEqual(
+            # 10 days * 4 records per day + 3 days * 3 records per day
+            n_removed,
+            10 * RECORDS_PER_DAY + COMPRESSED_DAYS * (RECORDS_PER_DAY - 1),
+        )
+        self.assertEqual(
+            len(records),
+            # 3 days * 1 + 7 days * 4
+            COMPRESSED_DAYS + 7 * RECORDS_PER_DAY,
+        )
+
+        # average 20 (10) days, inc. 3 compressed days, 7 days of 4 records per day.
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 20
+            SECONDS_IN.DAY * RECORDED_DAYS,
+            RECORDED_DAYS,
+            ts_compressed=ts_compressed,
+        )
+        avgs_expected = [1000 + 100.0 * (i + 1) for i in range(10)]
+        # first 10 days are None (expired)
+        self.assertEqual(avgs[10:], avgs_expected)
+        # same test settings for mvr
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 20
+            SECONDS_IN.DAY * RECORDED_DAYS,
+            RECORDED_DAYS,
+            ts_compressed=ts_compressed,
+            return_mvr=True,
+        )
+        for avg, avg_expected in zip(avgs[10:], avgs_expected):
+            self.assertEqual(avg.market_value, avg_expected)
+            self.assertEqual(avg.num_auctions, 100)
+            self.assertEqual(avg.min_buyout, 1)
+
+        # average 15 (5) days, inc. 3 compressed days, 2 days of 4 records per day.
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 15
+            SECONDS_IN.DAY * 15,
+            15,
+            ts_compressed=ts_compressed,
+        )
+        avgs_expected = [1000 + 100.0 * (i + 1) for i in range(5)]
+        # first 10 days are None (expired)
+        self.assertEqual(avgs[10:], avgs_expected)
+
+        # make sure records doesn't get modified
+        for a, b in zip(records, records_backup):
+            # __eq__ only compares timestamp for total ordering
+            # so we have to compare each field
+            self.assertEqual(a.timestamp, b.timestamp)
+            self.assertEqual(a.market_value, b.market_value)
+            self.assertEqual(a.num_auctions, b.num_auctions)
+            self.assertEqual(a.min_buyout, b.min_buyout)
+
+    def test_average_by_day_staggered(self):
+        RECORDED_DAYS = 20
+        RECORDS_PER_DAY = 4
+        records = MarketValueRecords()
+        # 4 records per day
+        record_list = [
+            MarketValueRecord(
+                timestamp=SECONDS_IN.DAY * (i / RECORDS_PER_DAY),
+                market_value=100 * ((i + RECORDS_PER_DAY) // RECORDS_PER_DAY),
+                num_auctions=100,
+                min_buyout=1,
+            )
+            for i in range(RECORDED_DAYS * RECORDS_PER_DAY)
+        ]
+        for mvr in record_list:
+            records.add(mvr, sort=False)
+
+        # compress first 10 days
+        COMPRESSED_DAYS = 10
+        ts_compressed = SECONDS_IN.DAY * COMPRESSED_DAYS
+        n_removed = records.compress(ts_compressed, SECONDS_IN.DAY * COMPRESSED_DAYS)
+        self.assertEqual(n_removed, COMPRESSED_DAYS * (RECORDS_PER_DAY - 1))
+
+        # average 10 days, inc. 5 compressed days
+        # c=compressed records, r=not compressed records, `()` means to average
+        # [c, c, c, c, (c, 2r), (2r, 2r), (2r, 2r), (2r, 2r), (2r, 2r), (2r, 2r)]
+        # c=[600, 700, 800, 900, 1000]
+        # r=[1100(x4), 1200(x4), ..., 1500(x4), 1600(x2)]
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 15.5
+            int(SECONDS_IN.DAY * 15.5),
+            10,
+            ts_compressed=ts_compressed,
+        )
+        part_compressed = [500.0 + 100.0 * (i + 1) for i in range(5)]
+        part_compressed[-1] = int((part_compressed[-1] + 2 * 1100) / 3 + 0.5)
+        part_not_compressed = [1050.0 + 100.0 * (i + 1) for i in range(5)]
+        avgs_expected = list(map(int, [*part_compressed, *part_not_compressed]))
+        self.assertEqual(avgs, avgs_expected)
+
+        # average 15 days, inc. 10 compressed days
+        # c=compressed records, r=not compressed records, `()` means to average
+        # [c, ...(7 more c), c, (c, 2r), (2r, 2r), (2r, 2r), (2r, 2r), (2r, 2r), (2r, 2r)]
+        # c=[100, 200, ..., 900, 1000]
+        # r=[1100(x4), 1200(x4), ..., 1500(x4), 1600(x2)]
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 15.5
+            int(SECONDS_IN.DAY * 15.5),
+            15,
+            ts_compressed=ts_compressed,
+        )
+        part_compressed = [100.0 * (i + 1) for i in range(10)]
+        part_compressed[-1] = int((part_compressed[-1] + 2 * 1100) / 3 + 0.5)
+        part_not_compressed = [1050.0 + 100.0 * (i + 1) for i in range(5)]
+        avgs_expected = list(map(int, [*part_compressed, *part_not_compressed]))
+        self.assertEqual(avgs, avgs_expected)
+
+        # average 5 days, inc. 0 compressed days
+        # c=compressed records, r=not compressed records, `()` means to average
+        # [(2r, 2r), (2r, 2r), (2r, 2r), (2r, 2r), (2r, 2r)]
+        # r=[1100(x4), 1200(x4), ..., 1500(x4), 1600(x2)]
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 15.5
+            int(SECONDS_IN.DAY * 15.5),
+            5,
+            ts_compressed=ts_compressed,
+        )
+        avgs_expected = [1050.0 + 100.0 * (i + 1) for i in range(5)]
+        self.assertEqual(avgs, avgs_expected)
+
+        # average 6 days, inc. 1 compressed day
+        # c=compressed records, r=not compressed records, `()` means to average
+        # [(c, 2r), (2r, 2r), (2r, 2r), (2r, 2r), (2r, 2r), (2r, 2r)]
+        # c=[1000]
+        # r=[1100(x4), 1200(x4), ..., 1500(x4), 1600(x2)]
+        avgs = MarketValueRecords.average_by_day(
+            records,
+            # now = day 15.5
+            int(SECONDS_IN.DAY * 15.5),
+            6,
+            ts_compressed=ts_compressed,
+        )
+        avgs_expected = [1050.0 + 100.0 * (i + 1) for i in range(5)]
+        avgs_expected = [int((1000 + 1100 * 2) / 3 + 0.5)] + avgs_expected
+        self.assertEqual(avgs, avgs_expected)
 
     def test_sort(self):
         RECORDED_DAYS = 20

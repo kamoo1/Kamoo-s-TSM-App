@@ -1,3 +1,3 @@
-# Flake8: noqa: F403, F401
+# ruff: noqa: F403
 from ah.models.blizzard import *
 from ah.models.self import *

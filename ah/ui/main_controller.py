@@ -1,6 +1,14 @@
 import re
 import os
 import sys
+import json
+import time
+import logging
+import platform
+import itertools
+import subprocess
+from collections import defaultdict
+from functools import wraps, lru_cache, partial
 from typing import (
     Tuple,
     List,
@@ -8,13 +16,6 @@ from typing import (
     Dict,
     Callable,
 )
-from functools import wraps, lru_cache, partial
-import logging
-import itertools
-import json
-import platform
-import subprocess
-from collections import defaultdict
 
 from PyQt5.QtWidgets import (
     QMainWindow,
@@ -24,6 +25,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QCheckBox,
     QComboBox,
+    QApplication,
 )
 from PyQt5.QtGui import (
     QValidator,
@@ -41,6 +43,7 @@ from PyQt5.QtCore import (
     QCoreApplication,
     QTranslator,
     QLocale,
+    QTimer,
 )
 
 from ah import __version__
@@ -61,6 +64,7 @@ from ah.models.blizzard import (
 from ah.api import GHAPI, BNAPI, UpdateEnum
 from ah.fs import remove_path
 from ah.patcher import main as patcher_main
+from ah.defs import SECONDS_IN
 
 
 class LocaleHelper:
@@ -108,7 +112,7 @@ DEFAULT_SETTINGS = (
     ),
     (
         "settings/repo",
-        "https://github.com/kamoo1/TSM-Backend",
+        "https://github.com/kamoo1/Kamoo-s-TSM-App",
         "lineEdit_settings_repo",
     ),
     (
@@ -706,6 +710,11 @@ class Window(QMainWindow, Ui_MainWindow):
         else:
             subprocess.Popen(["xdg-open", path])
 
+    def notify_user(self):
+        app = QApplication.instance()
+        app.alert(self)
+        app.beep()
+
     def load_locale_by_name(self, l_name: str):
         if l_name not in LH.map_name_code:
             msg = _t("MainWindow", "Locale {!r} not found!")
@@ -801,6 +810,17 @@ class Window(QMainWindow, Ui_MainWindow):
         # on export button click, export
         self.pushButton_exporter_export.clicked.connect(self.on_exporter_export)
 
+        # on remote mode checkbox click, refresh realm list
+        self.checkBox_exporter_remote.clicked.connect(self.on_exporter_dropdown_change)
+
+        # trigger `on_exporter_dropdown_change` every 5 minutes,
+        # to update last update time
+        self._exporter_update_time_timer = QTimer(self)
+        self._exporter_update_time_timer.timeout.connect(
+            partial(self.on_exporter_dropdown_change, update_time_only=True)
+        )
+        self._exporter_update_time_timer.start(7 * SECONDS_IN.MIN * 1000)
+
         """Updater Tab"""
         # client id validator
         self.lineEdit_updater_id.setValidator(
@@ -887,8 +907,8 @@ class Window(QMainWindow, Ui_MainWindow):
                 msg = _t(
                     "MainWindow",
                     "Update to version {!s} available, "
-                    "do you want to download now?"  # fmt: skip
-                )
+                    "do you want to download now?"
+                )  # fmt: skip
                 msg = msg.format(version)
                 reply = QMessageBox.question(
                     self,
@@ -904,8 +924,8 @@ class Window(QMainWindow, Ui_MainWindow):
                     "MainWindow",
                     "Update to version {!s} required, current version is no longer "
                     "being supported. "
-                    "Do you want to download now?"  # fmt: skip
-                )
+                    "Do you want to download now?"
+                )  # fmt: skip
                 msg = msg.format(version)
                 reply = QMessageBox.question(
                     self,
@@ -997,58 +1017,65 @@ class Window(QMainWindow, Ui_MainWindow):
             )
         model.set_selected(index.row(), item.checkState() == Qt.Checked)
 
-    def on_exporter_dropdown_change(self) -> None:
-        # lock widgets
-        for widget in self._lock_on_export_dropdown:
-            widget.setEnabled(False)
+    def on_exporter_dropdown_change(self, *, update_time_only=False) -> None:
+        if not update_time_only:
+            # lock widgets
+            for widget in self._lock_on_export_dropdown:
+                widget.setEnabled(False)
 
-        # save current selection
-        model = self.listView_exporter_realms.model()
-        if model:
-            model.save_settings()
+            # save current selection
+            model = self.listView_exporter_realms.model()
+            if model:
+                model.save_settings()
 
-        # clear model
-        model = self.listView_exporter_realms.model()
-        if model:
-            model.deleteLater()
+            # clear model
+            model = self.listView_exporter_realms.model()
+            if model:
+                model.deleteLater()
 
         try:
-            data_path = self.get_db_path()
             namespace = self.get_namespace()
 
             if self.checkBox_exporter_remote.isChecked():
                 repo = self.get_repo()
                 gh_api = self.get_gh_api()
-                forker = GithubFileForker(data_path, repo, gh_api)
+                forker = GithubFileForker(repo, gh_api)
+                # to not overwrite meta in local db
+                db_helper = DBHelper(config.DEFAULT_CACHE_PATH)
 
             else:
+                data_path = self.get_db_path()
                 forker = None
-
-            db_helper = DBHelper(data_path)
+                db_helper = DBHelper(data_path)
 
         except ConfigError as e:
             self.popup_error(_t("MainWindow", "Config Error"), str(e))
-            # unlock widgets
-            for widget in self._lock_on_export_dropdown:
-                widget.setEnabled(True)
+            if not update_time_only:
+                # unlock widgets
+                for widget in self._lock_on_export_dropdown:
+                    widget.setEnabled(True)
             return
 
         def on_data(data: Dict) -> None:
             meta = Meta(data=data)
-            tups_realm_crid = []
-            for crid, realms, _ in meta.iter_connected_realms():
-                for realm in realms:
-                    tups_realm_crid.append((realm, crid))
+            _, ts_end = meta.get_update_ts()
+            self.pupulate_exporter_time(ts_end)
 
-            self.populate_exporter_realms(tups_realm_crid, namespace=namespace)
+            if not update_time_only:
+                tups_realm_crid = []
+                for crid, realms, _ in meta.iter_connected_realms():
+                    for realm in realms:
+                        tups_realm_crid.append((realm, crid))
+                self.populate_exporter_realms(tups_realm_crid, namespace=namespace)
 
         def on_final(success: bool, msg: str) -> None:
-            # unlock widgets
-            for widget in self._lock_on_export_dropdown:
-                widget.setEnabled(True)
+            if not update_time_only:
+                # unlock widgets
+                for widget in self._lock_on_export_dropdown:
+                    widget.setEnabled(True)
 
             if not success:
-                self.popup_error(_t("MainWindow", "Export Error"), msg)
+                self.popup_error(_t("MainWindow", "Load Meta Error"), msg)
 
         @threaded(
             self,
@@ -1057,8 +1084,9 @@ class Window(QMainWindow, Ui_MainWindow):
             on_data=on_data,
         )
         def task():
-            # ioerror gets ignored by `load_meta`, returns empty dict.
             meta_file = db_helper.get_file(namespace, DBTypeEnum.META)
+            if forker:
+                meta_file.remove()
             meta = Meta.from_file(meta_file, forker=forker)
             return meta._data
 
@@ -1089,8 +1117,9 @@ class Window(QMainWindow, Ui_MainWindow):
                 "auction data.\n\n"
                 "You can patch now by clicking 'Yes' or pass by clicking 'No' "
                 "(you can always patch later by clicking 'Patch LibRealmInfo' "
-                "button in the 'Tools' tab)."  # fmt: skip
-            )
+                "button in the 'Tools' tab).\n\n"
+                "You might need to patch again after every TSM update."
+            )  # fmt: skip
             reply = QMessageBox.question(
                 self,
                 _t("MainWindow", "Patch TSM"),
@@ -1135,6 +1164,8 @@ class Window(QMainWindow, Ui_MainWindow):
 
             if not success:
                 self.popup_error(_t("MainWindow", "Export Error"), msg)
+            
+            self.notify_user()
 
         @threaded(self, on_final=on_final)
         def task(*args, **kwargs):
@@ -1178,7 +1209,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 widget.setEnabled(True)
             return
 
-        def on_task_done(success: bool, msg: str) -> None:
+        def on_final(success: bool, msg: str) -> None:
             # unlock widgets
             for widget in self._lock_on_update:
                 widget.setEnabled(True)
@@ -1186,7 +1217,9 @@ class Window(QMainWindow, Ui_MainWindow):
             if not success:
                 self.popup_error(_t("MainWindow", "Update Error"), msg)
 
-        @threaded(self, on_final=on_task_done)
+            self.notify_user()
+
+        @threaded(self, on_final=on_final)
         def task(*args, **kwargs):
             for region, game_version in combos:
                 updater_main(
@@ -1218,6 +1251,40 @@ class Window(QMainWindow, Ui_MainWindow):
         except ConfigError as e:
             self.popup_error(_t("MainWindow", "Config Error"), str(e))
             return
+
+    def pupulate_exporter_time(self, ts_end: int | None) -> None:
+        if ts_end is None:
+            text = _t("MainWindow", "Update: N/A")
+            self.label_exporter_time.setText(text)
+            return
+
+        units = [
+            ("day", SECONDS_IN.DAY),
+            ("hour", SECONDS_IN.HOUR),
+            ("minute", SECONDS_IN.MIN),
+        ]
+        delta = int(time.time()) - ts_end
+
+        for unit, seconds in units:
+            n = delta // seconds
+            if n:
+                break
+            delta = delta % seconds
+
+        if unit == "day":
+            text = _t("MainWindow", "Update: more than a day ago")
+        elif unit == "hour":
+            text = _t("MainWindow", "Update: {} hours ago").format(n)
+            if n == 1:
+                text = text.replace("hours", "hour")
+        elif unit == "minute":
+            text = _t("MainWindow", "Update: {} minutes ago").format(n)
+            if n == 1:
+                text = text.replace("minutes", "minute")
+        else:
+            text = _t("MainWindow", "Update: less than a minute ago")
+
+        self.label_exporter_time.setText(text)
 
     def populate_exporter_realms(
         self, tups_realm_crid: List[Tuple[str, int]], namespace: Namespace = None
@@ -1264,24 +1331,15 @@ class Window(QMainWindow, Ui_MainWindow):
         return GHAPI(cache, gh_proxy=gh_proxy)
 
     def get_namespace(self) -> Namespace:
-        # if we're in exporter tab (current tab name 'tab_exporter'):
-        if self.tabWidget.currentWidget() == self.tab_exporter:
-            region = RegionEnum[self.comboBox_exporter_region.currentText()]
-            game_version = GameVersionEnum[
-                self.comboBox_exporter_game_version.currentText()
-            ]
-            return Namespace(
-                category=NameSpaceCategoriesEnum.DYNAMIC,
-                game_version=game_version,
-                region=region,
-            )
-
-        else:
-            msg = _t(
-                "MainWindow", "Invalid selected tab {!r} for function 'get_namespace'"
-            )
-            msg = msg.format(self.tabWidget.currentWidget())
-            raise RuntimeError(msg)
+        region = RegionEnum[self.comboBox_exporter_region.currentText()]
+        game_version = GameVersionEnum[
+            self.comboBox_exporter_game_version.currentText()
+        ]
+        return Namespace(
+            category=NameSpaceCategoriesEnum.DYNAMIC,
+            game_version=game_version,
+            region=region,
+        )
 
     def get_db_path(self) -> str:
         data_path = self.lineEdit_settings_db_path.text()

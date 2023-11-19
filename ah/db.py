@@ -33,7 +33,6 @@ class GithubFileForker:
 
     def __init__(
         self,
-        data_path: str,
         fork_repo: str,
         gh_api: GHAPI,
     ) -> "GithubFileForker":
@@ -41,7 +40,6 @@ class GithubFileForker:
             raise ValueError(f"Invalid fork_repo: {fork_repo!r}")
 
         self._logger = logging.getLogger(self.__class__.__name__)
-        self._data_path = data_path
         self._fork_repo = fork_repo
         self._gh_api = gh_api
 

@@ -1,11 +1,10 @@
+import re
 import sys
+import time
 import logging
 import argparse
-import time
 from logging import getLogger
 from typing import Optional, Tuple
-import re
-
 from requests.exceptions import HTTPError
 
 from ah.api import BNAPI, GHAPI
@@ -22,6 +21,7 @@ from ah.models import (
     MapItemStringMarketValueRecords,
     ConnectedRealm,
     Meta,
+    MarketValueRecords,
 )
 from ah.storage import BinaryFile
 from ah.db import DBHelper, GithubFileForker
@@ -107,11 +107,29 @@ class Updater:
         file: BinaryFile,
         increment: MapItemStringMarketValueRecord,
         start_ts: int,
+        ts_compressed: int = 0,
+        is_tsc_local: bool = False,
     ) -> MapItemStringMarketValueRecords:
+        if file.exists() != is_tsc_local:
+            # db file and db compress ts locality does not match
+            # note in case of local mode + meta miss + data miss, the locality of
+            # meta and data did match. but `ts_compress` is still 0 due to blank
+            # `Meta`, due to local miss and forker is `None`.
+            self._logger.debug(
+                "`ts_compress` set to 0: "
+                f"{is_tsc_local=!r}, "
+                f"{file!r}.exists()={file.exists()!r}"
+            )
+            ts_compressed = 0
+
         records = MapItemStringMarketValueRecords.from_file(file, forker=self.forker)
         n_added_records, n_added_entries = records.update_increment(increment)
         n_removed_records = records.remove_expired(start_ts - self.RECORDS_EXPIRES_IN)
-        n_removed_records += records.compress(start_ts, self.RECORDS_EXPIRES_IN)
+        n_removed_records += records.compress(
+            start_ts,
+            self.RECORDS_EXPIRES_IN,
+            ts_compressed=ts_compressed,
+        )
         records.to_file(file)
         self._logger.info(
             f"DB update: {file!r}, {n_added_records=} "
@@ -123,6 +141,8 @@ class Updater:
         self,
         namespace: Namespace,
         connected_realm_ids: Tuple[int],
+        ts_compressed: int = 0,
+        is_tsc_local: bool = False,
     ) -> Tuple[int, int]:
         """update auction / commodities records for every connected realm under
         this region
@@ -150,13 +170,25 @@ class Updater:
                     crid=crid,
                     faction=faction,
                 )
-                self.save_increment(file, increment, start_ts)
+                self.save_increment(
+                    file,
+                    increment,
+                    start_ts,
+                    ts_compressed=ts_compressed,
+                    is_tsc_local=is_tsc_local,
+                )
 
         if namespace.game_version == GameVersionEnum.RETAIL:
             increment = self.pull_increment(namespace)
             if increment:
                 file = self.db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
-                self.save_increment(file, increment, start_ts)
+                self.save_increment(
+                    file,
+                    increment,
+                    start_ts,
+                    ts_compressed=ts_compressed,
+                    is_tsc_local=is_tsc_local,
+                )
 
         # just in case we're in the same ts as the increment, which cause
         # `MarketValueRecords.average_by_day` to ignore the increment record
@@ -196,14 +228,31 @@ class Updater:
     def update_region(self, namespace: Namespace) -> None:
         sys_info = SysInfo()
         sys_info.begin_monitor()
+        # get compress time from last start_ts
+        meta_file = self.db_helper.get_file(namespace, DBTypeEnum.META)
+        if meta_file.exists():
+            is_tsc_local = True
+        else:
+            is_tsc_local = False
+        meta = Meta.from_file(meta_file, forker=self.forker)
+        last_start_ts = meta.get_update_ts()[0]
+        if last_start_ts:
+            ts_compressed = MarketValueRecords.get_compress_end_ts(last_start_ts)
+        else:
+            self._logger.debug("meta file does not exist, set `ts_compress` to 0")
+            ts_compressed = 0
+
+        # create latest meta
         meta = self.pull_region_meta(namespace)
         start_ts, end_ts = self.update_region_records(
-            namespace, meta.get_connected_realm_ids()
+            namespace,
+            meta.get_connected_realm_ids(),
+            ts_compressed=ts_compressed,
+            is_tsc_local=is_tsc_local,
         )
         meta.set_update_ts(start_ts, end_ts)
         sys_info.stop_monitor()
         meta.set_system(sys_info.get_sysinfo())
-        meta_file = self.db_helper.get_file(namespace, DBTypeEnum.META)
         meta.to_file(meta_file)
 
 
@@ -223,7 +272,7 @@ def main(
 
     if repo:
         gh_api = gh_api or GHAPI(cache, gh_proxy)
-        forker = GithubFileForker(db_path, repo, gh_api)
+        forker = GithubFileForker(repo, gh_api)
     else:
         forker = None
 

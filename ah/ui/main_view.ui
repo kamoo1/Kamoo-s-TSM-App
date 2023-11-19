@@ -91,17 +91,28 @@
          <widget class="QListView" name="listView_exporter_realms"/>
         </item>
         <item>
-         <widget class="QCheckBox" name="checkBox_exporter_remote">
-          <property name="toolTip">
-           <string>⚠️ Overwrite local with remote DB on Github</string>
-          </property>
-          <property name="text">
-           <string>⚠️ Remote Mode</string>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
-          </property>
-         </widget>
+         <layout class="QHBoxLayout" name="horizontalLayout_5">
+          <item>
+           <widget class="QCheckBox" name="checkBox_exporter_remote">
+            <property name="toolTip">
+             <string>Export from DB on Github</string>
+            </property>
+            <property name="text">
+             <string>Remote Mode</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item alignment="Qt::AlignRight">
+           <widget class="QLabel" name="label_exporter_time">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
         <item>
          <widget class="QPushButton" name="pushButton_exporter_export">
