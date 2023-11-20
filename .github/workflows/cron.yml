@@ -9,30 +9,35 @@ on:
 jobs:
   get_hour:
     runs-on: ubuntu-latest
+    outputs:
+      remainder: ${{ steps.hour_modulo.outputs.remainder }}
     steps:
-      - name: Get current hour
-        id: current_hour
+      - name: Get Hour Modulo 3
+        id: hour_modulo
         run: |
           hour=$(date +'%H')
           remainder=$((hour % 3))
           echo "::set-output name=remainder::${remainder}"
 
   ah_tw:
-    if: ${{ steps.current_hour.outputs.remainder == 0 }}
+    needs: get_hour
+    if: ${{ needs.get_hour.outputs.remainder == 0 }}
     uses: ./.github/workflows/ah.yml
     with:
       xargs: retail tw classic tw classic_wlk tw
       upload_glob: '*tw*'
     
   ah_kr:
-    if: ${{ steps.current_hour.outputs.remainder == 1 }}
+    needs: get_hour
+    if: ${{ needs.get_hour.outputs.remainder == 1 }}
     uses: ./.github/workflows/ah.yml
     with:
       xargs: retail kr classic kr classic_wlk kr
       upload_glob: '*kr*'
 
   ah_us_eu:
-    if: ${{ steps.current_hour.outputs.remainder == 2 }}
+    needs: get_hour
+    if: ${{ needs.get_hour.outputs.remainder == 2 }}
     timeout-minutes: 50
     strategy:
       max-parallel: 1
