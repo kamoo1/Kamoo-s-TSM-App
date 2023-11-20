@@ -27,6 +27,7 @@ jobs:
     permissions:
       contents: write
     steps:
+    - uses: actions/checkout@v3
     - uses: ./.github/workflows/ah.yml
       with:
         xargs: retail tw classic tw classic_wlk tw
@@ -41,6 +42,7 @@ jobs:
     permissions:
       contents: write
     steps:
+    - uses: actions/checkout@v3
     - uses: ./.github/workflows/ah.yml
       with:
         xargs: retail kr classic kr classic_wlk kr
@@ -64,6 +66,7 @@ jobs:
         - xargs: classic eu
           upload_glob: '*eu*'
     steps:
+    - uses: actions/checkout@v3
     - uses: ./.github/workflows/ah.yml
       with:
         xargs: ${{ matrix.xargs }}
