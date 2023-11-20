@@ -73,7 +73,7 @@ jobs:
         BN_CLIENT_SECRET: ${{ secrets.BN_CLIENT_SECRET }}
       run: >
         printf %s\\n 
-        ${{ github.event.inputs.xargs }} |
+        ${{ inputs.xargs }} |
         xargs -n2 
         python -m ah.updater 
         --db_path ${{ env.DB_PATH }} 
@@ -83,7 +83,7 @@ jobs:
       with:
         tag_name: latest
         files: |
-          ${{ env.DB_PATH }}/${{ github.event.inputs.upload_glob }}.gz
-          ${{ env.DB_PATH }}/${{ github.event.inputs.upload_glob }}.bin
-          ${{ env.DB_PATH }}/${{ github.event.inputs.upload_glob }}.json
+          ${{ env.DB_PATH }}/${{ inputs.upload_glob }}.gz
+          ${{ env.DB_PATH }}/${{ inputs.upload_glob }}.bin
+          ${{ env.DB_PATH }}/${{ inputs.upload_glob }}.json
         name: DB ${{ env.JOB_START_TS }}
