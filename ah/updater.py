@@ -225,7 +225,7 @@ class Updater:
 
         return meta
 
-    def update_region(self, namespace: Namespace) -> None:
+    def update_region(self, namespace: Namespace, compress_all=False) -> None:
         sys_info = SysInfo()
         sys_info.begin_monitor()
         # get compress time from last start_ts
@@ -236,7 +236,10 @@ class Updater:
             is_tsc_local = False
         meta = Meta.from_file(meta_file, forker=self.forker)
         last_start_ts = meta.get_update_ts()[0]
-        if last_start_ts:
+        if compress_all:
+            self._logger.info("compress_all is True, set `ts_compress` to 0")
+            ts_compressed = 0
+        elif last_start_ts:
             ts_compressed = MarketValueRecords.get_compress_end_ts(last_start_ts)
         else:
             self._logger.debug("meta file does not exist, set `ts_compress` to 0")
@@ -262,6 +265,7 @@ def main(
     gh_proxy: str = None,
     game_version: GameVersionEnum = None,
     region: RegionEnum = None,
+    compress_all: bool = False,
     # below are for testability
     cache: Cache = None,
     gh_api: GHAPI = None,
@@ -288,7 +292,7 @@ def main(
     )
     db_helper = DBHelper(db_path)
     updater = Updater(bn_api, db_helper, forker=forker)
-    updater.update_region(namespace)
+    updater.update_region(namespace, compress_all=compress_all)
     updater._logger.info(f"Updated {namespace!r}")
 
 
@@ -325,6 +329,13 @@ def parse_args(raw_args):
         choices={e.name.lower() for e in GameVersionEnum},
         default=default_game_version,
         help=f"Game version to export, default: {default_game_version!r}",
+    )
+    parser.add_argument(
+        "--compress_all",
+        action="store_true",
+        help="ignore `ts_compress`, compress all records even if they have already "
+        "been compressed. In case of errors caused by `ts_compress` being "
+        "incorrect, use this option to fix it.",
     )
     parser.add_argument(
         "region",
