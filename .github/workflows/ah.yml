@@ -32,6 +32,7 @@ jobs:
       upload-coverage: false
 
   ah_update:
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     environment: env_main
     permissions:
