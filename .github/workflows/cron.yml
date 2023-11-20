@@ -1,71 +1,50 @@
-name: AH Update
+name: Cron Jobs
 
 on:
   workflow_dispatch:
   schedule:
-  # 8 times a day
-  - cron: '0 */3 * * *'
-
+  # every hour
+  - cron: '0 * * * *'
 
 jobs:
-  test:
-    uses: ./.github/workflows/test.yml
-    with:
-      upload-coverage: false
-
-  ah_update:
+  get_hour:
     runs-on: ubuntu-latest
-    environment: env_main
-    permissions:
-      contents: write
-    needs: test
     steps:
-    # checkout 'latest' tag
-    - uses: actions/checkout@v3
-      with:
-        ref: latest
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.10"
-        cache: "pip"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Set up environment variables
-      run: |
-        echo "JOB_START_TS=$(date +%s)" >> $GITHUB_ENV
-        echo "DB_PATH=/tmp/ah_db" >> $GITHUB_ENV
-    - name: Get AH Database File from GitHub Cache
-      uses: actions/cache@v3
-      with:
-        path: ${{ env.DB_PATH }}
-        # save cache, caches are evicted after 7 days 
-        # or by ascending access time if over 10GB
-        # https://github.com/actions/cache/issues/2#issuecomment-548426628
-        key: ${{ runner.os }}-ah-${{ env.JOB_START_TS }}
-        # load most recently created cache
-        restore-keys: |
-          ${{ runner.os }}-ah-
-    - name: Run AH Update
-      env:
-        BN_CLIENT_ID: ${{ secrets.BN_CLIENT_ID }}
-        BN_CLIENT_SECRET: ${{ secrets.BN_CLIENT_SECRET }}
-      run: >
-        printf %s\\n 
-        retail tw classic tw classic_wlk tw 
-        retail kr classic kr classic_wlk kr |
-        xargs -n2 
-        python -m ah.updater 
-        --db_path ${{ env.DB_PATH }} 
-        --game_version 
-    - name: Release DB
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: latest
-        files: |
-          ${{ env.DB_PATH }}/*{tw,kr}*.gz
-          ${{ env.DB_PATH }}/*{tw,kr}*.bin
-          ${{ env.DB_PATH }}/*{tw,kr}*.json
-        name: DB ${{ env.JOB_START_TS }}
+      - name: Get current hour
+        id: current_hour
+        run: |
+          hour=$(date +'%H')
+          remainder=$((hour % 3))
+          echo "::set-output name=remainder::${remainder}"
+
+  ah_tw:
+    if: ${{ steps.current_hour.outputs.remainder == 0 }}
+    uses: ./.github/workflows/ah.yml
+    with:
+      xargs: retail tw classic tw classic_wlk tw
+      upload_glob: '*tw*'
+    
+  ah_kr:
+    if: ${{ steps.current_hour.outputs.remainder == 1 }}
+    uses: ./.github/workflows/ah.yml
+    with:
+      xargs: retail kr classic kr classic_wlk kr
+      upload_glob: '*kr*'
+
+  ah_us_eu:
+    if: ${{ steps.current_hour.outputs.remainder == 2 }}
+    timeout-minutes: 50
+    strategy:
+      max-parallel: 1
+      matrix:
+        include:
+          - xargs: classic us
+            upload_glob: '*us*'
+          - xargs: classic eu
+            upload_glob: '*eu*'
+    steps:
+      - uses: ./.github/workflows/ah.yml
+        with:
+          xargs: ${{ matrix.xargs }}
+          upload_glob: ${{ matrix.upload_glob }}
+    
