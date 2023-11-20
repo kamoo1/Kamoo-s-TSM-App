@@ -20,27 +20,25 @@ jobs:
           echo "::set-output name=remainder::${remainder}"
 
   ah_tw:
-    needs: get_hour
-    if: ${{ needs.get_hour.outputs.remainder == 0 }}
-    timeout-minutes: 50
     uses: ./.github/workflows/ah.yml
+    if: ${{ needs.get_hour.outputs.remainder == 0 }}
+    needs: get_hour
     with:
       xargs: retail tw classic tw classic_wlk tw
       upload_glob: '*tw*'
     
   ah_kr:
-    needs: get_hour
-    if: ${{ needs.get_hour.outputs.remainder == 1 }}
-    timeout-minutes: 50
     uses: ./.github/workflows/ah.yml
+    if: ${{ needs.get_hour.outputs.remainder == 1 }}
+    needs: get_hour
     with:
       xargs: retail kr classic kr classic_wlk kr
       upload_glob: '*kr*'
 
   ah_us_eu:
-    needs: get_hour
+    uses: ./.github/workflows/ah.yml
     if: ${{ needs.get_hour.outputs.remainder == 2 }}
-    timeout-minutes: 50
+    needs: get_hour
     strategy:
       max-parallel: 1
       matrix:
@@ -49,7 +47,6 @@ jobs:
             upload_glob: '*us*'
           - xargs: classic eu
             upload_glob: '*eu*'
-    uses: ./.github/workflows/ah.yml
     with:
       xargs: ${{ matrix.xargs }}
       upload_glob: ${{ matrix.upload_glob }}
