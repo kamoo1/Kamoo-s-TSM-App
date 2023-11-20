@@ -58,7 +58,6 @@ jobs:
         retail kr classic kr classic_wlk kr |
         xargs -n2 
         python -m ah.updater 
-        --compress_all 
         --db_path ${{ env.DB_PATH }} 
         --game_version 
     - name: Release DB
