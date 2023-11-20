@@ -23,6 +23,8 @@ jobs:
     uses: ./.github/workflows/ah.yml
     if: ${{ needs.get_hour.outputs.remainder == 0 }}
     needs: get_hour
+    permissions:
+      contents: write
     with:
       xargs: retail tw classic tw classic_wlk tw
       upload_glob: '*tw*'
@@ -31,6 +33,8 @@ jobs:
     uses: ./.github/workflows/ah.yml
     if: ${{ needs.get_hour.outputs.remainder == 1 }}
     needs: get_hour
+    permissions:
+      contents: write
     with:
       xargs: retail kr classic kr classic_wlk kr
       upload_glob: '*kr*'
@@ -39,6 +43,8 @@ jobs:
     uses: ./.github/workflows/ah.yml
     if: ${{ needs.get_hour.outputs.remainder == 2 }}
     needs: get_hour
+    permissions:
+      contents: write
     strategy:
       max-parallel: 1
       matrix:
