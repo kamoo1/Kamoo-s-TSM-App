@@ -13,6 +13,14 @@ on:
         required: true
         default: '*'
         type: string
+    secrets:
+      BN_CLIENT_ID:
+        description: battle.net client id
+        required: true
+      BN_CLIENT_SECRET:
+        description: battle.net client secret
+        required: true
+    
   workflow_dispatch:
     inputs:
       xargs:
