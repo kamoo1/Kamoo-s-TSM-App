@@ -20,25 +20,24 @@ jobs:
           echo "::set-output name=remainder::${remainder}"
 
   ah_tw:
-    runs-on: ubuntu-latest
     needs: get_hour
     if: ${{ needs.get_hour.outputs.remainder == 0 }}
+    timeout-minutes: 50
     uses: ./.github/workflows/ah.yml
     with:
       xargs: retail tw classic tw classic_wlk tw
       upload_glob: '*tw*'
     
   ah_kr:
-    runs-on: ubuntu-latest
     needs: get_hour
     if: ${{ needs.get_hour.outputs.remainder == 1 }}
+    timeout-minutes: 50
     uses: ./.github/workflows/ah.yml
     with:
       xargs: retail kr classic kr classic_wlk kr
       upload_glob: '*kr*'
 
   ah_us_eu:
-    runs-on: ubuntu-latest
     needs: get_hour
     if: ${{ needs.get_hour.outputs.remainder == 2 }}
     timeout-minutes: 50
@@ -50,9 +49,8 @@ jobs:
             upload_glob: '*us*'
           - xargs: classic eu
             upload_glob: '*eu*'
-    steps:
-      - uses: ./.github/workflows/ah.yml
-        with:
-          xargs: ${{ matrix.xargs }}
-          upload_glob: ${{ matrix.upload_glob }}
+    uses: ./.github/workflows/ah.yml
+    with:
+      xargs: ${{ matrix.xargs }}
+      upload_glob: ${{ matrix.upload_glob }}
     

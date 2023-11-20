@@ -37,7 +37,6 @@ jobs:
     permissions:
       contents: write
     needs: test
-    timeout-minutes: 25
     steps:
     # checkout 'latest' tag
     - uses: actions/checkout@v3
