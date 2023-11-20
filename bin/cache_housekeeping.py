@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import glob
 import argparse
 
 
@@ -28,6 +29,11 @@ def rename_db_files(db_path: str):
     for src, dst in mvs:
         move(os.path.join(db_path, src), os.path.join(db_path, dst))
 
+def rm_us_eu_files(db_path: str):
+    # remove *us* and *eu* files
+    for fn in os.listdir(db_path):
+        if re.search(r"us|eu", fn):
+            os.remove(os.path.join(db_path, fn))
 
 def exec(command: str):
     # run bash command
@@ -39,9 +45,10 @@ def main(db_path: str = None):
     before_fns = list(os.listdir(db_path))
     print(f"Before files: {before_fns}")
     # rename_db_files(db_path)
-    exec(f"cd {db_path} && rm *classic*")
-    before_fns = list(os.listdir(db_path))
-    print(f"After files: {before_fns}")
+    # exec(f"cd {db_path} && rm *classic*")
+    rm_us_eu_files(db_path)
+    after_fns = list(os.listdir(db_path))
+    print(f"After files: {after_fns}")
 
 
 if __name__ == "__main__":
