@@ -2,6 +2,15 @@
 
 
 
+## v0.3.1 (2023-11-21)
+
+### Fix
+
+* fix: should not skip compression during error ([`9da14fe`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/9da14fe850eb8a2c8440a648f44fdcc1681f0628))
+
+* fix(ui): text alignment issue by long realm name ([`d34aa2f`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/d34aa2fd97755524ff2c6c6a5735d047552e2316))
+
+
 ## v0.3.0 (2023-11-19)
 
 ### Documentation
