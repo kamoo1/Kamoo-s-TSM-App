@@ -4,7 +4,7 @@ import time
 import logging
 import argparse
 from logging import getLogger
-from typing import Optional, Tuple
+from typing import Tuple
 from requests.exceptions import HTTPError
 
 from ah.api import BNAPI, GHAPI
