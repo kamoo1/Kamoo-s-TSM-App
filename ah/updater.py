@@ -4,7 +4,7 @@ import time
 import logging
 import argparse
 from logging import getLogger
-from typing import Optional, Tuple
+from typing import Tuple
 from requests.exceptions import HTTPError
 
 from ah.api import BNAPI, GHAPI
@@ -49,7 +49,7 @@ class Updater:
         namespace: Namespace,
         connected_realm_id: int = None,
         faction: FactionEnum = None,
-    ) -> Optional[MapItemStringMarketValueRecord]:
+    ) -> MapItemStringMarketValueRecord:
         """pull lastest auction increment from api, if `connected_realm_id`
         not given, then pull commodities (retail commodities are region-wide).
 
@@ -72,7 +72,7 @@ class Updater:
                     f"Error message: {e!s}"
                 )
                 self._logger.debug("traceback:", exc_info=True)
-                return
+                return MapItemStringMarketValueRecord()
 
             if not resp.get_auctions():
                 self._logger.warning(
@@ -89,7 +89,7 @@ class Updater:
                     f"Error message: {e!s}"
                 )
                 self._logger.debug("traceback:", exc_info=True)
-                return
+                return MapItemStringMarketValueRecord()
 
             if not resp.get_auctions():
                 self._logger.warning(
@@ -162,8 +162,6 @@ class Updater:
                     connected_realm_id=crid,
                     faction=faction,
                 )
-                if not increment:
-                    continue
                 file = self.db_helper.get_file(
                     namespace,
                     DBTypeEnum.AUCTIONS,
@@ -180,15 +178,14 @@ class Updater:
 
         if namespace.game_version == GameVersionEnum.RETAIL:
             increment = self.pull_increment(namespace)
-            if increment:
-                file = self.db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
-                self.save_increment(
-                    file,
-                    increment,
-                    start_ts,
-                    ts_compressed=ts_compressed,
-                    is_tsc_local=is_tsc_local,
-                )
+            file = self.db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
+            self.save_increment(
+                file,
+                increment,
+                start_ts,
+                ts_compressed=ts_compressed,
+                is_tsc_local=is_tsc_local,
+            )
 
         # just in case we're in the same ts as the increment, which cause
         # `MarketValueRecords.average_by_day` to ignore the increment record

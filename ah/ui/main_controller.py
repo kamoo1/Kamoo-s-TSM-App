@@ -382,7 +382,7 @@ class RealmsModel(QStandardItemModel):
         self._data = data
 
         for realm, crid in data:
-            item = QStandardItem(f"{realm}\t{crid}")
+            item = QStandardItem(f"{realm:<25}\t{crid}")
             item.setCheckable(True)
             item.setEditable(False)
             if self.is_last_checked(realm, crid):
