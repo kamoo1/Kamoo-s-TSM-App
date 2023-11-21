@@ -2,6 +2,13 @@ name: AH Update
 
 on:
   workflow_dispatch:
+    inputs:
+      compress_all:
+        description: 'compress all records'
+        required: false
+        type: boolean
+        default: false
+
   schedule:
   # 8 times a day
   - cron: '0 */3 * * *'
@@ -58,7 +65,7 @@ jobs:
         retail kr classic kr classic_wlk kr |
         xargs -n2 
         python -m ah.updater 
-        --compress_all 
+        ${{ inputs.compress_all && '--compress_all ' || ' ' }}
         --db_path ${{ env.DB_PATH }} 
         --game_version 
     - name: Release DB
