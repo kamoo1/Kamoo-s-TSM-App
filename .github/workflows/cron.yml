@@ -10,8 +10,8 @@ on:
         default: false
 
   schedule:
-  # 8 times a day
-  - cron: '0 */3 * * *'
+  # 12 times a day
+  - cron: '0 */2 * * *'
 
 
 jobs:
@@ -62,18 +62,45 @@ jobs:
       run: >
         printf %s\\n 
         retail tw classic tw classic_wlk tw 
-        retail kr classic kr classic_wlk kr |
+        retail kr classic kr classic_wlk kr 
+        classic us classic eu |
         xargs -n2 
         python -m ah.updater 
         ${{ inputs.compress_all && '--compress_all ' || ' ' }}
         --db_path ${{ env.DB_PATH }} 
         --game_version 
-    - name: Release DB
+    - name: Release DB - TW
       uses: softprops/action-gh-release@v1
       with:
         tag_name: latest
         files: |
-          ${{ env.DB_PATH }}/*.gz
-          ${{ env.DB_PATH }}/*.bin
-          ${{ env.DB_PATH }}/*.json
+          ${{ env.DB_PATH }}/*tw*.gz
+          ${{ env.DB_PATH }}/*tw*.bin
+          ${{ env.DB_PATH }}/*tw*.json
         name: DB ${{ env.JOB_START_TS }}
+    - name: Reset Rate Limit (sleep 1 minute)
+      run: sleep 60
+    - name: Release DB - KR
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: latest
+        files: |
+          ${{ env.DB_PATH }}/*kr*.gz
+          ${{ env.DB_PATH }}/*kr*.bin
+          ${{ env.DB_PATH }}/*kr*.json
+        name: DB ${{ env.JOB_START_TS }}
+    - name: Reset Rate Limit (sleep 1 minute)
+      run: sleep 60
+    - name: Release DB - US & EU
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: latest
+        files: |
+          ${{ env.DB_PATH }}/*us*.gz
+          ${{ env.DB_PATH }}/*us*.bin
+          ${{ env.DB_PATH }}/*us*.json
+          ${{ env.DB_PATH }}/*eu*.gz
+          ${{ env.DB_PATH }}/*eu*.bin
+          ${{ env.DB_PATH }}/*eu*.json
+        name: DB ${{ env.JOB_START_TS }}
+      
