@@ -329,7 +329,7 @@ class TestModels(TestCase):
                             "name": "realm name",
                             "id": 1,
                             "slug": "realm_name",
-                            "is_hardcore": True,
+                            "category": "hardcore",
                         },
                     ],
                 },
@@ -352,8 +352,21 @@ class TestModels(TestCase):
                         "id": 100,
                         "region": "US",
                         "connected_realm": {},
-                        "name": "realm name",
-                        "category": "",
+                        "name": "realm name 1",
+                        "category": "any other str",
+                        "locale": "",
+                        "timezone": "",
+                        "type": "",
+                        "is_tournament": False,
+                        "slug": "",
+                        "_links": {},
+                    },
+                    {
+                        "id": 101,
+                        "region": "US",
+                        "connected_realm": {},
+                        "name": "realm name 2",
+                        "category": "any other str",
                         "locale": "",
                         "timezone": "",
                         "type": "",
@@ -365,6 +378,39 @@ class TestModels(TestCase):
             }
             cr = ConnectedRealm.model_validate(cr_resp)
             meta.add_connected_realm(100, cr)
+            cr_resp = {
+                "id": 200,
+                "realms": [
+                    {
+                        "id": 200,
+                        "region": "US",
+                        "connected_realm": {},
+                        "name": "realm name 1",
+                        "category": "Seasonal",
+                        "locale": "",
+                        "timezone": "",
+                        "type": "",
+                        "is_tournament": False,
+                        "slug": "",
+                        "_links": {},
+                    },
+                    {
+                        "id": 201,
+                        "region": "US",
+                        "connected_realm": {},
+                        "name": "realm name 2",
+                        "category": "Seasonal",
+                        "locale": "",
+                        "timezone": "",
+                        "type": "",
+                        "is_tournament": False,
+                        "slug": "",
+                        "_links": {},
+                    }
+                ],
+            }
+            cr = ConnectedRealm.model_validate(cr_resp)
+            meta.add_connected_realm(200, cr)
             meta.to_file(meta_file)
 
             # update expected meta data
@@ -376,76 +422,31 @@ class TestModels(TestCase):
             expected_meta_data["connected_realms"]["100"] = [
                 {
                     "id": 100,
-                    "name": "realm name",
+                    "name": "realm name 1",
                     "slug": "",
-                    "is_hardcore": False,
+                    "category": "default",
+                },
+                {
+                    "id": 101,
+                    "name": "realm name 2",
+                    "slug": "",
+                    "category": "default",
                 }
             ]
-            with open(meta_path, "r") as f:
-                actual_meta_data = json.load(f)
-
-            self.assertDictEqual(actual_meta_data, expected_meta_data)
-
-    def test_meta_old_format_convert(self):
-        old_meta_data = {
-            "update": {
-                "start_ts": 1,
-                "end_ts": 2,
-                "duration": 1,
-            },
-            "connected_realms": {
-                "1": [
-                    "name1",
-                    "name2",
-                ],
-            },
-            "system": {},
-        }
-
-        # expected meta data after conversion
-        expected_meta_data = {
-            "update": {
-                "start_ts": 1,
-                "end_ts": 2,
-                "duration": 1,
-            },
-            "connected_realms": {
-                "1": [
-                    {
-                        "name": "name1",
-                        "id": None,
-                        "slug": None,
-                        "is_hardcore": False,
-                    },
-                    {
-                        "name": "name2",
-                        "id": None,
-                        "slug": None,
-                        "is_hardcore": False,
-                    },
-                ],
-            },
-            "system": {},
-        }
-        temp = TemporaryDirectory()
-        with temp:
-            path = temp.name
-            helper = DBHelper(path)
-            namespace = Namespace(
-                category=NameSpaceCategoriesEnum.DYNAMIC,
-                game_version=GameVersionEnum.CLASSIC,
-                region=RegionEnum.US,
-            )
-            meta_file = helper.get_file(namespace, DBTypeEnum.META)
-            meta_path = meta_file.file_path
-            with open(meta_path, "w") as f:
-                json.dump(old_meta_data, f)
-
-            # load old meta data, convert and save
-            meta = Meta.from_file(meta_file)
-            meta.to_file(meta_file)
-
-            # load actual meta data, should be converted
+            expected_meta_data["connected_realms"]["200"] = [
+                {
+                    "id": 200,
+                    "name": "realm name 1",
+                    "slug": "",
+                    "category": "seasonal",
+                },
+                {
+                    "id": 201,
+                    "name": "realm name 2",
+                    "slug": "",
+                    "category": "seasonal",
+                }
+            ]
             with open(meta_path, "r") as f:
                 actual_meta_data = json.load(f)
 

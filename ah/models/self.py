@@ -62,6 +62,7 @@ __all__ = (
     "ItemString",
     "MapItemStringMarketValueRecords",
     "MapItemStringMarketValueRecord",
+    "RealmCategoryEnum",
     "Meta",
 )
 
@@ -293,7 +294,7 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
 
     def compress(self, ts_now: int, ts_expires_in: int, ts_compressed: int = 0) -> int:
         """average all records in every day before `ts_now` down to one.
-        the average sample range is `[mid_day - 12hr, mid_day + 12hr]`, 
+        the average sample range is `[mid_day - 12hr, mid_day + 12hr]`,
         alighed to UTC day (mod `SECONDS_IN.DAY` is 0).
         the averaged record's timestamp is the mid_day.
         also remove records that are older than `ts_expires_in`.
@@ -1258,8 +1259,35 @@ class MapItemStringMarketValueRecords(_RootDictMixin[ItemString, MarketValueReco
             self._logger.info(f"{file} saved.")
 
 
+class RealmCategoryEnum(StrEnum_):
+    DEFAULT = "default"
+    HARDCORE = "hardcore"
+    SEASONAL = "seasonal"
+
+
 class Meta:
     _logger = getLogger("Meta")
+    # NOTE: there should be a unified identifier (facepalm)
+    ALL_CATE_HARDCORE: ClassVar[List[str]] = [
+        # en_US
+        "Hardcore",
+        # zh_CN
+        "专家模式",
+        # zh_TW
+        "專家模式",
+        # ko_KR
+        "하드코어",
+    ]
+    ALL_CATE_SEASONAL: ClassVar[List[str]] = [
+        # en_US
+        "Seasonal",
+        # zh_CN
+        "赛季",
+        # zh_TW
+        "季節性",
+        # ko_KR
+        "시즌",
+    ]
 
     def __init__(self, data: Dict = None) -> None:
         """
@@ -1276,7 +1304,7 @@ class Meta:
                             "name": $realm_name(native),
                             "id": $realm_id,
                             "slug": $realm_slug,
-                            "is_hardcore": $is_hardcore(bool),
+                            "category": $realm_category,
                         },
                         ...
                     ],
@@ -1299,12 +1327,19 @@ class Meta:
     def add_connected_realm(self, crid: int, connected_realm: ConnectedRealm) -> None:
         realms = []
         for realm in connected_realm.realms:
+            if realm.category in self.ALL_CATE_HARDCORE:
+                category = RealmCategoryEnum.HARDCORE
+            elif realm.category in self.ALL_CATE_SEASONAL:
+                category = RealmCategoryEnum.SEASONAL
+            else:
+                category = RealmCategoryEnum.DEFAULT
+
             realms.append(
                 {
                     "name": realm.name,
                     "id": realm.id,
                     "slug": realm.slug,
-                    "is_hardcore": realm.is_hardcore(),
+                    "category": category,
                 }
             )
 
@@ -1337,23 +1372,21 @@ class Meta:
 
     def iter_connected_realms(
         self,
-    ) -> Generator[Tuple[int, Set[str], bool], None, None]:
+    ) -> Generator[Tuple[int, Set[str], RealmCategoryEnum], None, None]:
         for crid, crs in self._data["connected_realms"].items():
             if not crs:
                 continue
-            # make sure realms are same type (hardcore or not)
-            n_hc = reduce(lambda s, realm: s + 1 if realm["is_hardcore"] else s, crs, 0)
-            if not (n_hc == 0 or n_hc == len(crs)):
-                self._logger.warning(
-                    f"connected realm {crid=} contains realms of different types!"
-                )
 
             cr_names = set()
             for realm in crs:
+                # it's the same for all realms in a connected realm
+                # see `ConnectedRealm.check_realm_category`
+                # TODO: for compatibility, default to DEFAULT,
+                # should be removed in the future
+                category = realm.get("category", RealmCategoryEnum.DEFAULT)
                 cr_names.add(realm["name"])
 
-            is_hc = n_hc == len(crs)
-            yield crid, cr_names, is_hc
+            yield crid, cr_names, category
 
     def get_update_ts(self) -> Tuple[int, int]:
         return self._data["update"]["start_ts"], self._data["update"]["end_ts"]
@@ -1376,37 +1409,6 @@ class Meta:
         data["connected_realms"] = {
             int(k): v for k, v in data["connected_realms"].items()
         }
-
-        """
-        support old format, convert it to new format
-        we should remove this after old format is no longer in use
-
-        old format:
-        >>> connected_realms = {
-                $str_id: [
-                    "name",
-                    "name",
-                    ...
-                ]
-            }
-
-        """
-        for crid, crs in data["connected_realms"].items():
-            if crs and isinstance(crs[0], dict):
-                break
-
-            data["connected_realms"][crid] = [
-                {
-                    "name": realm,
-                    "id": None,
-                    "slug": None,
-                    # we just assume all realms are non-hardcore
-                    # this will cause hardcore realms data not being
-                    # displayed in game
-                    "is_hardcore": False,
-                }
-                for realm in crs
-            ]
 
         meta = cls(data=data)
         cls._logger.info(f"{file} loaded.")
