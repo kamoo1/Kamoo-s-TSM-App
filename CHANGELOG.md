@@ -2,6 +2,26 @@
 
 
 
+## v1.0.0 (2023-12-01)
+
+### Breaking
+
+* feat: basic classic era seasonal support
+
+still need from WoW:
+- realm name not given in API (tw)
+- realm name incorrect in in-game API (tw)
+from TSM:
+- official TSM&#39;s support for seasonal realms
+- category id mismatch in in-game API (WoW)
+
+BREAKING CHANGE: meta schema changed ([`938fe79`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/938fe79cb5e3bf8d08adf7d0f31c6acde8e7f146))
+
+### Feature
+
+* feat(ui): display category on realm list ([`62e4bb5`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/62e4bb53b48b25a2277e325302fb39c8c0336a38))
+
+
 ## v0.3.1 (2023-11-21)
 
 ### Fix
