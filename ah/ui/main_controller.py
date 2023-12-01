@@ -54,7 +54,7 @@ from ah.updater import main as updater_main
 from ah.db import GithubFileForker, DBHelper
 from ah.cache import Cache
 from ah.models.base import StrEnum_
-from ah.models.self import DBTypeEnum, Meta
+from ah.models.self import DBTypeEnum, Meta, RealmCategoryEnum
 from ah.models.blizzard import (
     RegionEnum,
     GameVersionEnum,
@@ -339,7 +339,7 @@ class RegexValidator(VisualValidator):
 class RealmsModel(QStandardItemModel):
     def __init__(
         self,
-        data: List[Tuple[str, int]],
+        data: List[Tuple[str, int, RealmCategoryEnum]],
         *args,
         parent: QObject | None = None,
         namespace: Namespace | None = None,
@@ -381,8 +381,11 @@ class RealmsModel(QStandardItemModel):
 
         self._data = data
 
-        for realm, crid in data:
-            item = QStandardItem(f"{realm:<25}\t{crid}")
+        for realm, crid, cate in data:
+            if cate == RealmCategoryEnum.DEFAULT:
+                item = QStandardItem(f"{realm:<25}\t{crid}")
+            else:
+                item = QStandardItem(f"{realm:<25}\t{crid}\t{cate!s}")
             item.setCheckable(True)
             item.setEditable(False)
             if self.is_last_checked(realm, crid):
@@ -407,7 +410,7 @@ class RealmsModel(QStandardItemModel):
         )
 
     def set_selected(self, index: int, is_selected: bool) -> None:
-        realm, crid = self._data[index]
+        realm, crid, _ = self._data[index]
         if is_selected:
             self._selected[self._namespace].add((realm, crid))
 
@@ -1062,11 +1065,11 @@ class Window(QMainWindow, Ui_MainWindow):
             self.pupulate_exporter_time(ts_end)
 
             if not update_time_only:
-                tups_realm_crid = []
-                for crid, realms, _ in meta.iter_connected_realms():
+                tups_realm_crid_cate = []
+                for crid, realms, category in meta.iter_connected_realms():
                     for realm in realms:
-                        tups_realm_crid.append((realm, crid))
-                self.populate_exporter_realms(tups_realm_crid, namespace=namespace)
+                        tups_realm_crid_cate.append((realm, crid, category))
+                self.populate_exporter_realms(tups_realm_crid_cate, namespace=namespace)
 
         def on_final(success: bool, msg: str) -> None:
             if not update_time_only:
@@ -1164,7 +1167,7 @@ class Window(QMainWindow, Ui_MainWindow):
 
             if not success:
                 self.popup_error(_t("MainWindow", "Export Error"), msg)
-            
+
             self.notify_user()
 
         @threaded(self, on_final=on_final)
@@ -1287,10 +1290,12 @@ class Window(QMainWindow, Ui_MainWindow):
         self.label_exporter_time.setText(text)
 
     def populate_exporter_realms(
-        self, tups_realm_crid: List[Tuple[str, int]], namespace: Namespace = None
+        self,
+        tups_realm_crid_cate: List[Tuple[str, int, RealmCategoryEnum]],
+        namespace: Namespace = None,
     ) -> None:
         model = RealmsModel(
-            tups_realm_crid,
+            tups_realm_crid_cate,
             namespace=namespace,
             settings=self._settings,
         )

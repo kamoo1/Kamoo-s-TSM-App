@@ -1,6 +1,7 @@
 from __future__ import annotations
 import abc
 import time
+import logging
 from typing import (
     List,
     Iterator,
@@ -10,6 +11,7 @@ from typing import (
     Dict,
     Optional,
     ClassVar,
+    Tuple,
     TYPE_CHECKING,
 )
 
@@ -454,7 +456,7 @@ class Realm(_BaseModel):
     id: int
     region: Any = None
     connected_realm: Any = None
-    name: str
+    name: Optional[str] = None
     category: str
     locale: str
     # TODO: use tz type?
@@ -465,20 +467,41 @@ class Realm(_BaseModel):
     # wow/realm response has this field, but not connected realm response
     links: Optional[Any] = Field(None, alias="_links")
 
-    # NOTE: there should be a unified identifier (facepalm)
-    ALL_CATE_HARDCORE: ClassVar[List[str]] = [
-        # en_US
-        "Hardcore",
-        # zh_CN
-        "专家模式",
-        # zh_TW
-        "專家模式",
-        # ko_KR
-        "하드코어",
-    ]
+    # NOTE: on the launch day of classic SOD, there was a bug where the realm
+    # API returns `None` for `name` field for some realms. this is a temporary
+    # workaround for that.
+    MISSING_NAMES: ClassVar[Dict[Tuple[str, str], str]] = {
+        ("wild-growth", "zhTW"): "野性痊癒",
+        ("lone-wolf", "zhTW"): "孤狼",
+        ("living-flame", "zhTW"): "活化烈焰",
+        ("crusader-strike", "zhTW"): "十字軍聖擊",
+        # below are realms that are not in the game yet, but was listed in API
+        # these two don't have an official translation yet
+        # ("penance", "zhTW"): "苦修",
+        # ("shadowstrike", "zhTW"): "暗影打擊",
+        ("lava-lash", "zhTW"): "熔岩暴擊",
+        ("chaos-bolt", "zhTW"): "混沌箭",
+    }
+    logger: ClassVar[logging.Logger] = logging.getLogger("Realm")
 
-    def is_hardcore(self) -> bool:
-        return self.category in self.ALL_CATE_HARDCORE
+    @model_validator(mode="before")
+    @classmethod
+    def fix_missing_name(cls, values) -> Dict[str, Any]:
+        if values.get("name"):
+            return values
+
+        key = (values["slug"], values["locale"])
+        id_ = values["id"]
+        if key in cls.MISSING_NAMES:
+            value = cls.MISSING_NAMES[key]
+            values["name"] = value
+            cls.logger.warning(
+                f"set hardcode name for realm: {id_!s}, {key} -> {value}"
+            )
+        else:
+            raise ValueError(f"missing hardcode name for realm: {id_!s}, {key} -> ?")
+
+        return values
 
 
 class ConnectedRealm(_BaseModel):
@@ -497,3 +520,13 @@ class ConnectedRealm(_BaseModel):
         return cls.model_validate(resp)
 
     model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="after")
+    def check_realm_category(self) -> "ConnectedRealm":
+        categories = set(r.category for r in self.realms)
+        if len(categories) != 1:
+            raise ValueError(
+                f"connected realms with different categories: crid={self.id!s}, {categories=!r}"
+            )
+
+        return self

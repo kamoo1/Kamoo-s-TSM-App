@@ -16,6 +16,7 @@ from ah.models import (
     FactionEnum,
     Meta,
     MarketValueRecords,
+    RealmCategoryEnum,
 )
 from ah.storage import TextFile
 from ah.db import DBHelper, GithubFileForker
@@ -103,6 +104,7 @@ class TSMExporter:
     TSM_VERSION = 41200
     MOCK_WARCRAFT_BASE = "fake_warcraft_base"
     TSM_HC_LABEL = "HC"
+    TSM_SEASONAL_LABEL = "SoD"
     _logger = logging.getLogger("TSMExporter")
 
     def __init__(
@@ -277,12 +279,16 @@ class TSMExporter:
         if not export_realms <= all_realms:
             raise ValueError(f"unavailable realms : {export_realms - all_realms}. ")
 
-        # determines if we need to export hc / non-hc reagional data
-        should_export_hc_regional = should_export_non_hc_regional = False
-        # collect all auction data (non-hc) under this region
-        region_auctions_commodities_data = MapItemStringMarketValueRecords()
-        # only hc auction data under this region, prices will be vastly different
-        region_auctions_data_hc = MapItemStringMarketValueRecords()
+        # determines if we need to export data of each category - if user selected
+        # realms under a category, we need to export that category
+        cate_should_export = dict()
+        for cate in RealmCategoryEnum:
+            cate_should_export[cate] = False
+
+        # auctions + commodities (if applicable) for all realms under this category
+        cate_data = dict()
+        for cate in RealmCategoryEnum:
+            cate_data[cate] = MapItemStringMarketValueRecords()
 
         if namespace.game_version == GameVersionEnum.RETAIL:
             commodity_file = self.db_helper.get_file(namespace, DBTypeEnum.COMMODITIES)
@@ -296,8 +302,7 @@ class TSMExporter:
             commodity_data = None
 
         if commodity_data:
-            # HC doesn't have commodities
-            region_auctions_commodities_data.extend(commodity_data)
+            cate_data[RealmCategoryEnum.DEFAULT].extend(commodity_data)
             self.export_append_data(
                 self.export_file,
                 commodity_data,
@@ -313,7 +318,7 @@ class TSMExporter:
         else:
             factions = [FactionEnum.ALLIANCE, FactionEnum.HORDE]
 
-        for crid, connected_realms, is_hc in meta.iter_connected_realms():
+        for crid, connected_realms, category in meta.iter_connected_realms():
             # find all realm names we want to export under this connected realm,
             # they share the same auction data
             sub_export_realms = export_realms & connected_realms
@@ -334,16 +339,12 @@ class TSMExporter:
                     self._logger.warning(f"no data in {db_file}.")
                     continue
 
-                if is_hc:
-                    region_auctions_data_hc.extend(auction_data)
-                else:
-                    region_auctions_commodities_data.extend(auction_data)
+                cate_data[category].extend(auction_data)
 
                 if not sub_export_realms:
                     continue
                 else:
-                    should_export_hc_regional = should_export_hc_regional or is_hc
-                    should_export_non_hc_regional = should_export_non_hc_regional or not is_hc
+                    cate_should_export[category] = True
 
                 if commodity_data:
                     realm_auctions_commodities_data = MapItemStringMarketValueRecords()
@@ -378,26 +379,23 @@ class TSMExporter:
                             ts_update_end,
                         )
 
-        for data, is_hc_ in zip(
-            [region_auctions_commodities_data, region_auctions_data_hc], [False, True]
-        ):
+        for cate, data in cate_data.items():
             if not data:
                 continue
 
-            if is_hc_ and not should_export_hc_regional:
-                continue
-
-            if not is_hc_ and not should_export_non_hc_regional:
+            if not cate_should_export[cate]:
                 continue
 
             region = namespace.region.upper()
-            tsm_game_version = (
-                self.TSM_HC_LABEL
-                if is_hc_
-                else namespace.game_version.get_tsm_game_version()
-            )
-            if tsm_game_version:
-                tsm_region = f"{tsm_game_version}-{region}"
+            if cate == RealmCategoryEnum.HARDCORE:
+                part = self.TSM_HC_LABEL
+            elif cate == RealmCategoryEnum.SEASONAL:
+                part = self.TSM_SEASONAL_LABEL
+            else:
+                part = namespace.game_version.get_tsm_game_version()
+
+            if part:
+                tsm_region = f"{part}-{region}"
             else:
                 # retail = None
                 tsm_region = region

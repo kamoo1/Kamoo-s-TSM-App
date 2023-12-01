@@ -60,7 +60,7 @@ class DummyAPIWrapper:
                     "connected_realm": {},
                     "category": ""
                     if connected_realm_id % 2
-                    else Realm.ALL_CATE_HARDCORE[0],
+                    else Meta.ALL_CATE_HARDCORE[0],
                     "type": "",
                     "is_tournament": False,
                 },
@@ -74,7 +74,7 @@ class DummyAPIWrapper:
                     "connected_realm": {},
                     "category": ""
                     if connected_realm_id % 2
-                    else Realm.ALL_CATE_HARDCORE[0],
+                    else Meta.ALL_CATE_HARDCORE[0],
                     "type": "",
                     "is_tournament": False,
                 },
