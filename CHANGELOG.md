@@ -2,6 +2,13 @@
 
 
 
+## v1.0.2 (2023-12-03)
+
+### Fix
+
+* fix(patcher): update for SoD realms ([`5b6a436`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/5b6a436bab94313f3b0a0399b2b336d0b93c3877))
+
+
 ## v1.0.1 (2023-12-03)
 
 ### Fix
