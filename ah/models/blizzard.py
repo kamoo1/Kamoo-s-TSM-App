@@ -473,7 +473,7 @@ class Realm(_BaseModel):
     MISSING_NAMES: ClassVar[Dict[Tuple[str, str], str]] = {
         ("wild-growth", "zhTW"): "野性痊癒",
         ("lone-wolf", "zhTW"): "孤狼",
-        ("living-flame", "zhTW"): "活化烈焰",
+        ("living-flame", "zhTW"): "生命烈焰",
         ("crusader-strike", "zhTW"): "十字軍聖擊",
         # below are realms that are not in the game yet, but was listed in API
         # these two don't have an official translation yet
