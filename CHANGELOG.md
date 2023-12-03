@@ -2,6 +2,13 @@
 
 
 
+## v1.0.1 (2023-12-03)
+
+### Fix
+
+* fix(patcher): hash change ([`18d2230`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/18d2230bc7239875fc6bca8613c94a388cd702f4))
+
+
 ## v1.0.0 (2023-12-01)
 
 ### Breaking
