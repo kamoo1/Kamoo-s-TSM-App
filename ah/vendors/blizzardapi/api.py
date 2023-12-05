@@ -1,5 +1,6 @@
 """api.py file."""
 import requests
+from requests.adapters import HTTPAdapter, Retry
 
 from ah import config
 
@@ -33,6 +34,11 @@ class Api:
         self._oauth_url_cn = "https://oauth.battlenet.com.cn{0}"
 
         self._session = requests.Session()
+        retries = Retry(
+            total=5, backoff_factor=1, status_forcelist=[429]
+        )
+        self._session.mount("https://", HTTPAdapter(max_retries=retries))
+        self._session.mount("http://", HTTPAdapter(max_retries=retries))
 
     def _get_client_token(self, region):
         """Fetch an access token based on client id and client secret credentials.

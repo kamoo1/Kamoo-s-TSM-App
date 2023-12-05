@@ -91,7 +91,7 @@ jobs:
         name: DB ${{ env.JOB_START_TS }}
     - name: Reset Rate Limit (sleep 1 minute)
       run: sleep 60
-    - name: Release DB - US & EU
+    - name: Release DB - US
       uses: softprops/action-gh-release@v1
       with:
         tag_name: latest
@@ -99,8 +99,14 @@ jobs:
           ${{ env.DB_PATH }}/*us*.gz
           ${{ env.DB_PATH }}/*us*.bin
           ${{ env.DB_PATH }}/*us*.json
+        name: DB ${{ env.JOB_START_TS }}
+    - name: Reset Rate Limit (sleep 1 minute)
+      run: sleep 60
+    - name: Release DB - EU
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: latest
+        files: |
           ${{ env.DB_PATH }}/*eu*.gz
           ${{ env.DB_PATH }}/*eu*.bin
           ${{ env.DB_PATH }}/*eu*.json
-        name: DB ${{ env.JOB_START_TS }}
-      
