@@ -4,7 +4,7 @@ from heapq import heappush, heappop
 from collections import defaultdict
 from logging import Logger, getLogger
 from copy import deepcopy
-from functools import total_ordering, lru_cache, reduce
+from functools import total_ordering, lru_cache
 from itertools import chain
 import json
 from typing import (
@@ -48,6 +48,7 @@ from ah.models.blizzard import (
 )
 from ah.defs import SECONDS_IN
 from ah.data import map_bonuses
+from ah.errors import CompressTsError
 
 if TYPE_CHECKING:
     from ah.db import GithubFileForker
@@ -423,7 +424,7 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
                     buckets[i].append(record)
                 else:
                     if i in skipped:
-                        raise ValueError(
+                        raise CompressTsError(
                             f"skipped record already exists, old: {skipped[i]} "
                             f"new: {record}"
                         )
