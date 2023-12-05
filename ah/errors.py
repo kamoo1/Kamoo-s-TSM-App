@@ -6,3 +6,7 @@ class AHError(Exception):
 
 class DownloadError(AHError):
     pass
+
+
+class CompressTsError(ValueError, AHError):
+    pass

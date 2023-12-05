@@ -5,7 +5,7 @@ import logging
 import argparse
 from logging import getLogger
 from typing import Tuple
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, RetryError
 
 from ah.api import BNAPI, GHAPI
 from ah.models import (
@@ -28,6 +28,7 @@ from ah.db import DBHelper, GithubFileForker
 from ah import config
 from ah.cache import Cache
 from ah.sysinfo import SysInfo
+from ah.errors import CompressTsError
 
 
 class Updater:
@@ -83,7 +84,13 @@ class Updater:
         else:
             try:
                 resp = CommoditiesResponse.from_api(self.bn_api, namespace)
-            except HTTPError as e:
+            except (HTTPError, RetryError) as e:
+                """NOTE:
+                Dec 5, 2023: 
+                High chance of hitting 429. added throttling, but commodities 
+                still fails with 100% chance of 429.
+
+                """
                 self._logger.warning(
                     f"Failed to request commodities for: {namespace=!r}. "
                     f"Error message: {e!s}"
@@ -125,11 +132,25 @@ class Updater:
         records = MapItemStringMarketValueRecords.from_file(file, forker=self.forker)
         n_added_records, n_added_entries = records.update_increment(increment)
         n_removed_records = records.remove_expired(start_ts - self.RECORDS_EXPIRES_IN)
-        n_removed_records += records.compress(
-            start_ts,
-            self.RECORDS_EXPIRES_IN,
-            ts_compressed=ts_compressed,
-        )
+        try:
+            n_removed_records += records.compress(
+                start_ts,
+                self.RECORDS_EXPIRES_IN,
+                ts_compressed=ts_compressed,
+            )
+        except CompressTsError as e:
+            self._logger.warning(
+                f"`ts_compress` {ts_compressed!s} incompatible with records: "
+                f"{file!r}, setting `ts_compress` to 0. "
+                f"Error message: {e!s}"
+            )
+            self._logger.debug("traceback:", exc_info=True)
+            n_removed_records += records.compress(
+                start_ts,
+                self.RECORDS_EXPIRES_IN,
+                ts_compressed=0,
+            )
+
         records.to_file(file)
         self._logger.info(
             f"DB update: {file!r}, {n_added_records=} "
