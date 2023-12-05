@@ -2,6 +2,15 @@
 
 
 
+## v1.0.5 (2023-12-05)
+
+### Fix
+
+* fix: allow commodity 429 error to pass
+
+add retry on compress error, with `ts_compress` set to 0 ([`7e2a574`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/7e2a574a7e6bce69444ac93fe85856e40b0e69a0))
+
+
 ## v1.0.4 (2023-12-05)
 
 ### Fix
