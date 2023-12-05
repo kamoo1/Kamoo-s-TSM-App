@@ -2,6 +2,13 @@
 
 
 
+## v1.0.4 (2023-12-05)
+
+### Fix
+
+* fix: blz api retry on rate limit ([`6fad520`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/6fad520b8d24556b4122924cdc32753f2915f8c1))
+
+
 ## v1.0.3 (2023-12-03)
 
 ### Fix
