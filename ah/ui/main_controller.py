@@ -1238,7 +1238,17 @@ class Window(QMainWindow, Ui_MainWindow):
         task()
 
     def on_patch_tsm(self) -> None:
-        args = ["batch_patch", BATCH_PATCH_JSON]
+        try:
+            args = [
+                "batch_patch",
+                "--warcraft_base",
+                self.get_warcraft_base(),
+                BATCH_PATCH_JSON,
+            ]
+        except ConfigError as e:
+            self.popup_error(_t("MainWindow", "Config Error"), str(e))
+            return
+
         patcher_main(args)
         # pop up feedback
         QMessageBox.information(
