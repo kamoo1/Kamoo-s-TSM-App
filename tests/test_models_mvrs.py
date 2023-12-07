@@ -533,7 +533,7 @@ class TestModels(TestCase):
                 timestamp=ts_start - n,
                 market_value=1,
                 num_auctions=1,
-                min_buyout=1,
+                min_buyout=1000,
             )
             for n in range(n_expired, 0, -1)
         ]
@@ -563,7 +563,7 @@ class TestModels(TestCase):
                     num_auctions=10 * n_th_day + n_th_record,
                     # compressed value would be the min
                     # min_buyout = 0
-                    min_buyout=1000 * n_th_day + n_th_record,
+                    min_buyout=3000 + 10 * n_th_day + n_th_record,
                 )
             )
 
@@ -582,7 +582,7 @@ class TestModels(TestCase):
                         + int(n_th_day * SECONDS_IN.DAY + SECONDS_IN.DAY // 2),
                         market_value=last_compressed_market_value,
                         num_auctions=last_compressed_num_auctions,
-                        min_buyout=1000 * n_th_day,
+                        min_buyout=3000 + 10 * n_th_day,
                     )
                 )
 
@@ -592,9 +592,9 @@ class TestModels(TestCase):
             timestamp=ts_end - 1,
             market_value=last_compressed_market_value,
             num_auctions=last_compressed_num_auctions,
-            min_buyout=0,
+            min_buyout=2999,
         )
-        expected_compressed_records[-1].min_buyout = 0
+        expected_compressed_records[-1].min_buyout = 2999
 
         # put records that will not be compressed (ts_end, ts_now)
         recent_records = [
@@ -602,7 +602,7 @@ class TestModels(TestCase):
                 timestamp=n,
                 market_value=1,
                 num_auctions=1,
-                min_buyout=1,
+                min_buyout=5000,
             )
             for n in range(ts_end, ts_now, (ts_now - ts_end) // n_recent)
         ]

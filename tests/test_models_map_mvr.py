@@ -10,6 +10,8 @@ from ah.models import (
     Auction,
     Commodity,
     GameVersionEnum,
+    ItemString,
+    ItemStringTypeEnum,
 )
 
 
@@ -192,3 +194,194 @@ class TestModels(TestCase):
         }
         resp = CommoditiesResponse.model_validate(obj)
         self.assertEqual(resp.get_auctions(), [])
+
+    def test_min_price_classic(self):
+        """classic auction has buyout=0 for bid-only auctions"""
+        obj = {
+            "_links": {},
+            "connected_realm": {},
+            "auctions": [
+                Auction(
+                    id=0,
+                    item=AuctionItem(
+                        id=0,
+                        context=1,
+                        bonus_lists=None,
+                        modifiers=None,
+                    ),
+                    buyout=0,
+                    bid=100,
+                    quantity=10,
+                    time_left="VERY_LONG",
+                ),
+                Auction(
+                    id=1,
+                    item=AuctionItem(
+                        id=0,
+                        context=1,
+                        bonus_lists=None,
+                        modifiers=None,
+                    ),
+                    buyout=555,
+                    bid=100,
+                    quantity=5,
+                    time_left="VERY_LONG",
+                ),
+            ],
+            "commodities": {},
+            "timestamp": 100,
+        }
+        resp = AuctionsResponse.model_validate(obj)
+        increment = MapItemStringMarketValueRecord.from_response(
+            resp, game_version=GameVersionEnum.CLASSIC
+        )
+        itemstring = ItemString(
+            type=ItemStringTypeEnum.ITEM,
+            id=0,
+            bonuses=None,
+            mods=None,
+        )
+        # buyout / quantity
+        self.assertEqual(increment[itemstring].min_buyout, 111)
+
+        """second case, all bid-only auctions
+        """
+        obj = {
+            "_links": {},
+            "connected_realm": {},
+            "auctions": [
+                Auction(
+                    id=0,
+                    item=AuctionItem(
+                        id=0,
+                        context=1,
+                        bonus_lists=None,
+                        modifiers=None,
+                    ),
+                    buyout=0,
+                    bid=100,
+                    quantity=10,
+                    time_left="VERY_LONG",
+                ),
+                Auction(
+                    id=1,
+                    item=AuctionItem(
+                        id=0,
+                        context=1,
+                        bonus_lists=None,
+                        modifiers=None,
+                    ),
+                    buyout=0,
+                    bid=100,
+                    quantity=5,
+                    time_left="VERY_LONG",
+                ),
+            ],
+            "commodities": {},
+            "timestamp": 100,
+        }
+        resp = AuctionsResponse.model_validate(obj)
+        increment = MapItemStringMarketValueRecord.from_response(
+            resp, game_version=GameVersionEnum.CLASSIC
+        )
+        itemstring = ItemString(
+            type=ItemStringTypeEnum.ITEM,
+            id=0,
+            bonuses=None,
+            mods=None,
+        )
+        self.assertEqual(increment[itemstring].min_buyout, 0)
+
+    def test_min_price_retail(self):
+        """retail auction doesn't have buyout field for bid-only auctions"""
+        obj = {
+            "_links": {},
+            "connected_realm": {},
+            "auctions": [
+                Auction(
+                    id=0,
+                    item=AuctionItem(
+                        id=0,
+                        context=1,
+                        bonus_lists=None,
+                        modifiers=None,
+                    ),
+                    bid=100,
+                    quantity=10,
+                    time_left="VERY_LONG",
+                ),
+                Auction(
+                    id=1,
+                    item=AuctionItem(
+                        id=0,
+                        context=1,
+                        bonus_lists=None,
+                        modifiers=None,
+                    ),
+                    buyout=555,
+                    bid=100,
+                    quantity=5,
+                    time_left="VERY_LONG",
+                ),
+            ],
+            "commodities": {},
+            "timestamp": 100,
+        }
+        resp = AuctionsResponse.model_validate(obj)
+        increment = MapItemStringMarketValueRecord.from_response(
+            resp, game_version=GameVersionEnum.RETAIL
+        )
+        itemstring = ItemString(
+            type=ItemStringTypeEnum.ITEM,
+            id=0,
+            bonuses=None,
+            mods=None,
+        )
+        # buyout don't have to be divided by quantity
+        self.assertEqual(increment[itemstring].min_buyout, 555)
+
+        """second case, all bid-only auctions
+        """
+        obj = {
+            "_links": {},
+            "connected_realm": {},
+            "auctions": [
+                Auction(
+                    id=0,
+                    item=AuctionItem(
+                        id=0,
+                        context=1,
+                        bonus_lists=None,
+                        modifiers=None,
+                    ),
+                    bid=100,
+                    quantity=10,
+                    time_left="VERY_LONG",
+                ),
+                Auction(
+                    id=1,
+                    item=AuctionItem(
+                        id=0,
+                        context=1,
+                        bonus_lists=None,
+                        modifiers=None,
+                    ),
+                    bid=100,
+                    quantity=5,
+                    time_left="VERY_LONG",
+                ),
+            ],
+            "commodities": {},
+            "timestamp": 100,
+        }
+        resp = AuctionsResponse.model_validate(obj)
+        increment = MapItemStringMarketValueRecord.from_response(
+            resp, game_version=GameVersionEnum.RETAIL
+        )
+        itemstring = ItemString(
+            type=ItemStringTypeEnum.ITEM,
+            id=0,
+            bonuses=None,
+            mods=None,
+        )
+        self.assertEqual(increment[itemstring].min_buyout, 0)
