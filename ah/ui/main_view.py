@@ -226,7 +226,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "AH"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "Kamoo\'s TSM App"))
         self.checkBox_exporter_remote.setToolTip(_translate("MainWindow", "Export from DB on Github"))
         self.checkBox_exporter_remote.setText(_translate("MainWindow", "Remote Mode"))
         self.pushButton_exporter_export.setText(_translate("MainWindow", "Export"))

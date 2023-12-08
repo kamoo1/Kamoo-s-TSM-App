@@ -336,6 +336,24 @@ class RegexValidator(VisualValidator):
             raise ConfigError(_t("MainWindow", "Invalid Input"))
 
 
+class BNClientIDValidator(RegexValidator):
+    def __init__(self, obj: QWidget, *args, **kwargs):
+        super().__init__(obj, r"^[a-f0-9]{32}$", *args, **kwargs)
+
+    def raise_invalid(self):
+        if self.get_state() != QValidator.Acceptable:
+            raise ConfigError(_t("MainWindow", "Invalid Battle.net Client ID"))
+
+
+class BNClientSecretValidator(RegexValidator):
+    def __init__(self, obj: QWidget, *args, **kwargs):
+        super().__init__(obj, r"^[a-zA-Z0-9]{32}$", *args, **kwargs)
+
+    def raise_invalid(self):
+        if self.get_state() != QValidator.Acceptable:
+            raise ConfigError(_t("MainWindow", "Invalid Battle.net Client Secret"))
+
+
 class RealmsModel(QStandardItemModel):
     def __init__(
         self,
@@ -827,13 +845,13 @@ class Window(QMainWindow, Ui_MainWindow):
         """Updater Tab"""
         # client id validator
         self.lineEdit_updater_id.setValidator(
-            RegexValidator(self.lineEdit_updater_id, r"^[a-f0-9]{32}$")
+            BNClientIDValidator(self.lineEdit_updater_id)
         )
         self.lineEdit_updater_id.hasAcceptableInput()
 
         # client secret validator
         self.lineEdit_updater_secret.setValidator(
-            RegexValidator(self.lineEdit_updater_secret, r"^[a-zA-Z0-9]{32}$")
+            BNClientSecretValidator(self.lineEdit_updater_secret)
         )
         self.lineEdit_updater_secret.hasAcceptableInput()
 
@@ -930,7 +948,7 @@ class Window(QMainWindow, Ui_MainWindow):
                     "Do you want to download now?"
                 )  # fmt: skip
                 msg = msg.format(version)
-                reply = QMessageBox.question(
+                reply = QMessageBox.warning(
                     self,
                     _t("MainWindow", "Update Required"),
                     msg,
@@ -1195,8 +1213,7 @@ class Window(QMainWindow, Ui_MainWindow):
             repo = self.get_repo()
             remote_mode = self.checkBox_updater_remote.isChecked()
             gh_proxy = self.get_gh_proxy()
-            client_id = self.lineEdit_updater_id.text()
-            client_secret = self.lineEdit_updater_secret.text()
+            client_id, client_secret = self.get_bn_id_secret()
             cache = self.get_cache()
             bn_api = BNAPI(
                 client_id=client_id,
@@ -1238,7 +1255,17 @@ class Window(QMainWindow, Ui_MainWindow):
         task()
 
     def on_patch_tsm(self) -> None:
-        args = ["batch_patch", BATCH_PATCH_JSON]
+        try:
+            args = [
+                "batch_patch",
+                "--warcraft_base",
+                self.get_warcraft_base(),
+                BATCH_PATCH_JSON,
+            ]
+        except ConfigError as e:
+            self.popup_error(_t("MainWindow", "Config Error"), str(e))
+            return
+
         patcher_main(args)
         # pop up feedback
         QMessageBox.information(
@@ -1363,3 +1390,10 @@ class Window(QMainWindow, Ui_MainWindow):
         warcraft_base = os.path.normpath(warcraft_base)
         warcraft_base = os.path.abspath(warcraft_base)
         return warcraft_base
+
+    def get_bn_id_secret(self) -> Tuple[str, str]:
+        self.lineEdit_updater_id.validator().raise_invalid()
+        self.lineEdit_updater_secret.validator().raise_invalid()
+        client_id = self.lineEdit_updater_id.text()
+        client_secret = self.lineEdit_updater_secret.text()
+        return client_id, client_secret

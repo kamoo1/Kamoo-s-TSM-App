@@ -217,7 +217,7 @@ class TestWorkflow(TestCase):
             (47, 1),
             (100, 1),
         ]
-        expected_mv = 14
+        expected_mv = 15
         temp = TemporaryDirectory()
         cate = NameSpaceCategoriesEnum.STATIC
         game_ver = GameVersionEnum.RETAIL

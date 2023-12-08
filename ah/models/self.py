@@ -1,6 +1,6 @@
 from __future__ import annotations
 from functools import partial
-from heapq import heappush, heappop
+from heapq import heappush, heappop, nsmallest
 from collections import defaultdict
 from logging import Logger, getLogger
 from copy import deepcopy
@@ -230,11 +230,10 @@ class MarketValueRecord:
 
     _logger: ClassVar[Logger] = getLogger("MarketValueRecord")
     timestamp: np.int32 = field(converter=np.int32)
-    market_value: Optional[np.int64] = field(converter=CW.optional(np.int64))
+    market_value: np.int64 = field(converter=np.int64)
     num_auctions: np.int32 = field(converter=np.int32)
-    min_buyout: Optional[np.int64] = field(
-        default=None, converter=CW.optional(np.int64)
-    )
+    # min_buyout=0 means no buyout (auction is bid only)
+    min_buyout: np.int64 = field(converter=np.int64)
 
     def __eq__(self, other):
         return self.timestamp == other.timestamp
@@ -455,7 +454,11 @@ class MarketValueRecords(_RootListMixin[MarketValueRecord]):
                 avg_num_auctions = int(avg_num_auctions + 0.5)
                 # XXX: TSM keeps the last min_buyout of the day, not average (?)
                 # https://github.com/WouterBink/TradeSkillMaster-1/blob/master/TradeSkillMaster_AuctionDB/Modules/data.lua#L175
-                min_min_buyout = min(record.min_buyout for record in records)
+                # NOTE: we use 0 to indicate no buyout, instead of the min price
+                # being 0 (special meaning)
+                min2 = nsmallest(2, (r.min_buyout for r in records))
+                min_min_buyout = next((n for n in min2 if n), 0)
+
                 # mid-day timestamp
                 time_stamp = int(ts_now - (i + 0.5) * SECONDS_IN.DAY)
                 days_average[day] = MarketValueRecord(
@@ -914,7 +917,9 @@ class MapItemStringMarketValueRecord(_RootDictMixin[ItemString, MarketValueRecor
     SAMPLE_HI: ClassVar[float] = 0.3
 
     @classmethod
-    def calc_market_value(cls, item_n: int, price_groups: Iterable[Tuple[int, int]]):
+    def calc_market_value(
+        cls, item_n: int, price_groups: Iterable[Tuple[int, int]]
+    ) -> int | None:
         """calculate market value from a list of (price, quantity) tuples
         `price_groups` is a list of tuples of (price, quantity), sorted by price.
         a older version of this function used to take just a list of prices (by
@@ -999,7 +1004,7 @@ class MapItemStringMarketValueRecord(_RootDictMixin[ItemString, MarketValueRecor
         game_version: GameVersionEnum = GameVersionEnum.RETAIL,
     ) -> "MapItemStringMarketValueRecord":
         obj = cls()
-        # >>> {item_string: [total_quantity, [(price, quantity), ...]]}
+        # >>> [total_quantity, min_buyout, [(price, quantity), ...]]
         temp = {}
 
         for auction in response.get_auctions():
@@ -1010,18 +1015,24 @@ class MapItemStringMarketValueRecord(_RootDictMixin[ItemString, MarketValueRecor
             price = auction.get_price()
             buyout = auction.get_buyout()
             if game_version in (GameVersionEnum.CLASSIC, GameVersionEnum.CLASSIC_WLK):
-                # for classic, prices are per stack
-                buyout = None if buyout is None else buyout // quantity
-                price = None if price is None else price // quantity
+                # for classic:
+                # - prices are per stack
+                # - response always have both buyout and bid fields
+                # - when auction is bid-only, buyout = 0
+                buyout = buyout // quantity
+                price = price // quantity
+            else:
+                # for retail:
+                # - response at lease have one of buyout and bid fields
+                # - response: both buyout and bid could be None
+                # - we will normalize buyout=None to 0 (same as classic)
+                buyout = buyout or 0
 
             if item_string not in temp:
-                # >>> [total_quantity, min_buyout, [(price, quantity), ...]]
-                temp[item_string] = [0, None, []]
+                temp[item_string] = [0, float("inf"), []]
 
             temp[item_string][0] += quantity
-            if buyout is not None and (
-                temp[item_string][1] is None or buyout < temp[item_string][1]
-            ):
+            if buyout and buyout < temp[item_string][1]:
                 temp[item_string][1] = buyout
 
             # we're using bid as price for auctions without buyout
@@ -1032,12 +1043,16 @@ class MapItemStringMarketValueRecord(_RootDictMixin[ItemString, MarketValueRecor
                 temp[item_string][0], cls._heap_pop_all(temp[item_string][2])
             )
             if market_value:
+                market_value = np.int64(market_value + 0.5)
+                # if all auctions are bid-only, min_buyout = 0
+                min_buyout = (
+                    0 if temp[item_string][1] == float("inf") else temp[item_string][1]
+                )
                 obj[item_string] = MarketValueRecord(
                     timestamp=response.get_timestamp(),
                     market_value=market_value,
                     num_auctions=temp[item_string][0],
-                    # for auctions without buyout, their min_buyout are set 0
-                    min_buyout=temp[item_string][1] or 0,
+                    min_buyout=min_buyout,
                 )
 
         return obj

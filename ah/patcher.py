@@ -108,7 +108,7 @@ def hash_(*, file: io.TextIOWrapper, out: io.TextIOWrapper) -> None:
     out.write(h + "\n")
 
 
-def batch_patch(jobs_json: io.TextIOWrapper) -> None:
+def batch_patch(*, warcraft_base: str, jobs_json: io.TextIOWrapper) -> None:
     try:
         args_list = json.load(jobs_json)
 
@@ -119,8 +119,6 @@ def batch_patch(jobs_json: io.TextIOWrapper) -> None:
     finally:
         jobs_json.close()
 
-    # TODO: add os support other than Windows
-    warcraft_base = TSMExporter.find_warcraft_base()
     if not warcraft_base:
         raise PatcherFileError("Failed to find warcraft base.")
 
@@ -229,6 +227,17 @@ def parse_args(args: List[str]) -> Dict[str, Any]:
         help="batch patch files.",
     )
     parser_batch_patch.set_defaults(func=batch_patch)
+    default_warcraft_base = TSMExporter.find_warcraft_base()
+    parser_batch_patch.add_argument(
+        "--warcraft_base",
+        type=str,
+        default=default_warcraft_base,
+        help="Path to Warcraft installation directory, "
+        "it will replace all occurrences of {warcraft_base} in jobs. "
+        "needed if the script is unable to locate it automatically, "
+        "should be something like 'C:\\path_to\\World of Warcraft'. "
+        f"Auto detect: {default_warcraft_base!r}",
+    )
     parser_batch_patch.add_argument(
         "jobs_json",
         type=file_type("r"),

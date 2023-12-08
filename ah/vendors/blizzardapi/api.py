@@ -35,7 +35,7 @@ class Api:
 
         self._session = requests.Session()
         retries = Retry(
-            total=5, backoff_factor=1, status_forcelist=[429]
+            total=5, backoff_factor=1, status_forcelist=[429, 502]
         )
         self._session.mount("https://", HTTPAdapter(max_retries=retries))
         self._session.mount("http://", HTTPAdapter(max_retries=retries))
