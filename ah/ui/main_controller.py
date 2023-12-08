@@ -930,7 +930,7 @@ class Window(QMainWindow, Ui_MainWindow):
                     "Do you want to download now?"
                 )  # fmt: skip
                 msg = msg.format(version)
-                reply = QMessageBox.question(
+                reply = QMessageBox.warning(
                     self,
                     _t("MainWindow", "Update Required"),
                     msg,

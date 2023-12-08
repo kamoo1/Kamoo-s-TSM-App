@@ -14,7 +14,7 @@
    <enum>Qt::DefaultContextMenu</enum>
   </property>
   <property name="windowTitle">
-   <string>AH</string>
+   <string>Kamoo's TSM App</string>
   </property>
   <property name="unifiedTitleAndToolBarOnMac">
    <bool>false</bool>
