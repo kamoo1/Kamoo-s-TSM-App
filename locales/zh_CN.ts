@@ -4,11 +4,6 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../ah/ui/main_view.py" line="229"/>
-        <source>AH</source>
-        <translation>AH</translation>
-    </message>
-    <message>
         <location filename="../ah/ui/main_view.py" line="232"/>
         <source>Export</source>
         <translation>导出</translation>
@@ -144,67 +139,67 @@
         <translation>日志</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="283"/>
+        <location filename="../ah/ui/main_controller.py" line="284"/>
         <source>Invalid Warcraft Base Path</source>
         <translation>无效的魔兽世界根路径</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="299"/>
+        <location filename="../ah/ui/main_controller.py" line="300"/>
         <source>Invalid Github Repo</source>
         <translation>无效的GitHub仓库</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="315"/>
+        <location filename="../ah/ui/main_controller.py" line="316"/>
         <source>Invalid Github Proxy</source>
         <translation>无效的GitHub代理</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="335"/>
+        <location filename="../ah/ui/main_controller.py" line="336"/>
         <source>Invalid Input</source>
         <translation>无效输入</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="673"/>
+        <location filename="../ah/ui/main_controller.py" line="695"/>
         <source>Remove Path</source>
         <translation>删除路径</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="695"/>
+        <location filename="../ah/ui/main_controller.py" line="717"/>
         <source>Browse Path</source>
         <translation>浏览路径</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="753"/>
+        <location filename="../ah/ui/main_controller.py" line="780"/>
         <source>Select DB Path</source>
         <translation>选择数据库路径</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="766"/>
+        <location filename="../ah/ui/main_controller.py" line="793"/>
         <source>Select Warcraft Base Path</source>
         <translation>选择魔兽世界根路径</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1242"/>
+        <location filename="../ah/ui/main_controller.py" line="1282"/>
         <source>Config Error</source>
         <translation>配置错误</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1160"/>
+        <location filename="../ah/ui/main_controller.py" line="1187"/>
         <source>Export Error</source>
         <translation>导出错误</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1210"/>
+        <location filename="../ah/ui/main_controller.py" line="1238"/>
         <source>Update Error</source>
         <translation>更新错误</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1231"/>
+        <location filename="../ah/ui/main_controller.py" line="1271"/>
         <source>Patch TSM</source>
         <translation>TSM补丁</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1231"/>
+        <location filename="../ah/ui/main_controller.py" line="1271"/>
         <source>Patched TSM successfully!</source>
         <translation>TSM已成功补丁！</translation>
     </message>
@@ -214,72 +209,72 @@
         <translation>语言 (language)</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="603"/>
+        <location filename="../ah/ui/main_controller.py" line="625"/>
         <source>Unknown widget type for load settings: {!r}</source>
         <translation>无法加载 {!r} 的设置，因为其类型未知。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="613"/>
+        <location filename="../ah/ui/main_controller.py" line="635"/>
         <source>Failed to load settings for {!r}</source>
         <translation>无法加载 {!r} 的设置。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="631"/>
+        <location filename="../ah/ui/main_controller.py" line="653"/>
         <source>Unknown widget type for save settings: {!r}</source>
         <translation>无法保存 {!r} 的设置，因为其类型未知。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="693"/>
+        <location filename="../ah/ui/main_controller.py" line="715"/>
         <source>{!r} does not exist.</source>
         <translation>{!r} 不存在。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="714"/>
+        <location filename="../ah/ui/main_controller.py" line="741"/>
         <source>Locale {!r} not found!</source>
         <translation>找不到语言 {!r}！</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="671"/>
+        <location filename="../ah/ui/main_controller.py" line="693"/>
         <source>Are you sure you want to remove {!r}?</source>
         <translation>您确定要删除 {!r} 吗？</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="726"/>
+        <location filename="../ah/ui/main_controller.py" line="753"/>
         <source>Battle.net client ID, will be saved under {!r}.</source>
         <translation>Battle.net客户端ID，将保存在 {!r} 下。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="729"/>
+        <location filename="../ah/ui/main_controller.py" line="756"/>
         <source>Battle.net client secret, will be saved under {!r}.</source>
         <translation>Battle.net客户端密钥，将保存在 {!r} 下。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="907"/>
+        <location filename="../ah/ui/main_controller.py" line="934"/>
         <source>Update Available</source>
         <translation>更新可用</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="924"/>
+        <location filename="../ah/ui/main_controller.py" line="951"/>
         <source>Update Required</source>
         <translation>需要更新</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="901"/>
+        <location filename="../ah/ui/main_controller.py" line="928"/>
         <source>Update to version {!s} available, do you want to download now?</source>
         <translation>有新版本 {!s} 可供更新，是否现在下载？</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="917"/>
+        <location filename="../ah/ui/main_controller.py" line="944"/>
         <source>Update to version {!s} required, current version is no longer being supported. Do you want to download now?</source>
         <translation>需要更新到版本 {!s}，当前版本不再受支持。是否现在下载？</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="950"/>
+        <location filename="../ah/ui/main_controller.py" line="977"/>
         <source>Check Update Error</source>
         <translation>检查更新错误</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1072"/>
+        <location filename="../ah/ui/main_controller.py" line="1099"/>
         <source>Load Meta Error</source>
         <translation>加载 Meta 错误</translation>
     </message>
@@ -289,7 +284,7 @@
         <translation>从 Github 上的数据库导出</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1103"/>
+        <location filename="../ah/ui/main_controller.py" line="1130"/>
         <source>If you&apos;re exporting regions and realms not officially supported by TSM (like TW, KR, and some classic realms), it is recommended to patch TSM&apos;s &apos;LibRealmInfo&apos; library with the data of some newly added realms they&apos;re missing. 
 
 Missing these data can cause TSM misidentify the region of these realms, which can lead to problem loading auction data.
@@ -306,29 +301,44 @@ You might need to patch again after every TSM update.</source>
 每次 TSM 更新后可能需要重新补丁。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1247"/>
+        <location filename="../ah/ui/main_controller.py" line="1287"/>
         <source>Update: N/A</source>
         <translation>更新：N/A</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1265"/>
+        <location filename="../ah/ui/main_controller.py" line="1305"/>
         <source>Update: more than a day ago</source>
         <translation>更新：超过一天前</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1267"/>
+        <location filename="../ah/ui/main_controller.py" line="1307"/>
         <source>Update: {} hours ago</source>
         <translation>更新：{}小时前</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1271"/>
+        <location filename="../ah/ui/main_controller.py" line="1311"/>
         <source>Update: {} minutes ago</source>
         <translation>更新：{}分钟前</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1275"/>
+        <location filename="../ah/ui/main_controller.py" line="1315"/>
         <source>Update: less than a minute ago</source>
         <translation>更新：不到一分钟前</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_controller.py" line="345"/>
+        <source>Invalid Battle.net Client ID</source>
+        <translation>无效的 Battle.net 客户端 ID</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_controller.py" line="354"/>
+        <source>Invalid Battle.net Client Secret</source>
+        <translation>无效的 Battle.net 客户端密钥</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_view.py" line="229"/>
+        <source>Kamoo&apos;s TSM App</source>
+        <translation></translation>
     </message>
 </context>
 </TS>
