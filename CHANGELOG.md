@@ -2,6 +2,24 @@
 
 
 
+## v1.1.0 (2023-12-08)
+
+### Feature
+
+* feat(ui): add BN client id &amp; secret validator ([`8f24951`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/8f24951890eaace39590463341712719d5d09a71))
+
+### Fix
+
+* fix: `min_buyout` is 0 if any bid-only auction
+
+`min_buyout` becomes 0 if there&#39;s any bid-only auction on classic,
+leading missing `min_buyout` info for that item. ([`ae48252`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/ae482525e7699770f34d955b82e5e56e6dffb193))
+
+* fix(ui): pass `warcraft_base` down to patch jobs ([`8a2d750`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/8a2d750bef666cf6309e4ab3db7a0bc356687943))
+
+* fix: add retry on battle net api 502 error ([`db30081`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/db30081630f35b5108c09460fcbee7cb84e875d8))
+
+
 ## v1.0.5 (2023-12-05)
 
 ### Fix
