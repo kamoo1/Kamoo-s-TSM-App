@@ -6,6 +6,7 @@ from logging import Logger, getLogger
 from copy import deepcopy
 from functools import total_ordering, lru_cache
 from itertools import chain
+import re
 import json
 from typing import (
     List,
@@ -22,6 +23,7 @@ from typing import (
 
 import numpy as np
 from attrs import define, field, Factory
+from requests.exceptions import HTTPError
 
 from ah.protobuf.item_db_pb2 import (
     ItemDB,
@@ -48,10 +50,11 @@ from ah.models.blizzard import (
 )
 from ah.defs import SECONDS_IN
 from ah.data import map_bonuses
-from ah.errors import CompressTsError
+from ah.errors import CompressTsError, GetConnectedRealmsIndexError
 
 if TYPE_CHECKING:
     from ah.db import GithubFileForker
+    from ah.api import BNAPI
 
 __all__ = (
     "DBTypeEnum",
@@ -1338,6 +1341,7 @@ class Meta:
                 "duration": None,
             },
             "connected_realms": {},
+            "system": {},
         }
 
     def add_connected_realm(self, crid: int, connected_realm: ConnectedRealm) -> None:
@@ -1439,3 +1443,37 @@ class Meta:
         with file.open("w") as f:
             json.dump(data, f, indent=4)
         self._logger.info(f"{file} saved.")
+
+    @classmethod
+    def from_api(cls, bn_api: BNAPI, namespace: Namespace) -> "Meta":
+        """get latest connected realm info for this region"""
+        meta = cls()
+        crids = []
+        try:
+            resp = bn_api.get_connected_realms_index(namespace)
+        except HTTPError as e:
+            raise GetConnectedRealmsIndexError from e
+
+        for cr in resp["connected_realms"]:
+            match = re.search(r"connected-realm/(\d+)", cr["href"])
+            crid = match.group(1)
+            crids.append(int(crid))
+
+        for crid in crids:
+            try:
+                connected_realm = ConnectedRealm.from_api(bn_api, namespace, crid)
+            except HTTPError as e:
+                """
+                NOTE: some of the connected realms fails with a 404 status code.
+
+                """
+                cls._logger.warning(
+                    "Failed to request connected realm data for: "
+                    f"{namespace!r} {crid}. "
+                    f"Error message: {e!s}"
+                )
+                cls._logger.debug("traceback:", exc_info=True)
+            else:
+                meta.add_connected_realm(crid, connected_realm)
+
+        return meta

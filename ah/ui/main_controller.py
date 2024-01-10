@@ -117,10 +117,10 @@ DEFAULT_SETTINGS = (
     ),
     (
         "settings/gh_proxy",
-        "https://worker.moonglade.site",
+        "https://www.example.com",
         "lineEdit_settings_gh_proxy",
     ),
-    ("settings/gh_proxy_enabled", True, "checkBox_settings_gh_proxy"),
+    ("settings/gh_proxy_enabled", False, "checkBox_settings_gh_proxy"),
     (
         "settings/locale",
         LH.get_default_name(),

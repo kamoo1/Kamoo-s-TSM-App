@@ -10,3 +10,7 @@ class DownloadError(AHError):
 
 class CompressTsError(ValueError, AHError):
     pass
+
+
+class GetConnectedRealmsIndexError(AHError):
+    pass
