@@ -2,6 +2,13 @@
 
 
 
+## v1.1.1 (2024-01-10)
+
+### Fix
+
+* fix: reuse old connected realm info when API fails ([`9ed4093`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/9ed4093a31e504336d6c03c23adfc78d8207fee1))
+
+
 ## v1.1.0 (2023-12-08)
 
 ### Feature
