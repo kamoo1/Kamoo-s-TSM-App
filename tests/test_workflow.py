@@ -15,10 +15,10 @@ from ah.models import (
     NameSpaceCategoriesEnum,
     DBTypeEnum,
     RegionEnum,
-    Realm,
     Meta,
     DBFileName,
 )
+from ah.errors import GetConnectedRealmsIndexError
 from ah.db import DBHelper
 from ah.updater import main as updater_main, parse_args as updater_parse_args
 from ah.tsm_exporter import main as exporter_main, parse_args as exporter_parse_args
@@ -649,4 +649,42 @@ class TestWorkflow(TestCase):
                         ts_compressed=SECONDS_IN.DAY,
                     ),
                 ]
+            )
+
+    @mock.patch.object(MapItemStringMarketValueRecords, "update_increment")
+    @mock.patch.object(DummyAPIWrapper, "get_connected_realms_index")
+    def test_updater_cr_index_api_fail(self, m1, m2):
+        """test the ability to reuse existing connected realms index
+        during `get_connected_realms_index` api failure.
+        """
+        m1.side_effect = GetConnectedRealmsIndexError()
+        m2.return_value = (1, 1)  # update_increment
+        temp = TemporaryDirectory()
+        db_path = f"{temp.name}/db"
+        with temp:
+            last_meta = Meta(
+                {
+                    "update": {
+                        "start_ts": 1,
+                        "end_ts": 2,
+                        "duration": 1,
+                    },
+                    "connected_realms": {100: [100, 101]},
+                    "system": {},
+                }
+            )
+            db_helper = DBHelper(db_path)
+            meta_fn = "dynamic-us_meta.json"
+            meta_fn = DBFileName.from_str(meta_fn)
+            meta_file = db_helper.get_file(
+                meta_fn.namespace,
+                meta_fn.db_type,
+            )
+            last_meta.to_file(meta_file)
+            updater = Updater(DummyAPIWrapper(), db_helper, forker=None)
+            ns = Namespace.from_str("dynamic-us")
+            updater.update_region(ns)
+            new_meta = Meta.from_file(meta_file)
+            self.assertDictEqual(
+                last_meta._data["connected_realms"], new_meta._data["connected_realms"]
             )

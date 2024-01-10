@@ -1,4 +1,3 @@
-import re
 import sys
 import time
 import logging
@@ -19,7 +18,6 @@ from ah.models import (
     GameVersionEnum,
     FactionEnum,
     MapItemStringMarketValueRecords,
-    ConnectedRealm,
     Meta,
     MarketValueRecords,
 )
@@ -28,7 +26,7 @@ from ah.db import DBHelper, GithubFileForker
 from ah import config
 from ah.cache import Cache
 from ah.sysinfo import SysInfo
-from ah.errors import CompressTsError
+from ah.errors import CompressTsError, GetConnectedRealmsIndexError
 
 
 class Updater:
@@ -214,35 +212,6 @@ class Updater:
         end_ts = int(time.time()) + 1
         return start_ts, end_ts
 
-    def pull_region_meta(self, namespace: Namespace) -> Meta:
-        """get latest connected realm info for this region"""
-        meta = Meta()
-        crids = []
-        resp = self.bn_api.get_connected_realms_index(namespace)
-        for cr in resp["connected_realms"]:
-            match = re.search(r"connected-realm/(\d+)", cr["href"])
-            crid = match.group(1)
-            crids.append(int(crid))
-
-        for crid in crids:
-            try:
-                connected_realm = ConnectedRealm.from_api(self.bn_api, namespace, crid)
-            except HTTPError as e:
-                """
-                NOTE: some of the connected realms fails with a 404 status code.
-
-                """
-                self._logger.warning(
-                    "Failed to request connected realm data for: "
-                    f"{namespace!r} {crid}. "
-                    f"Error message: {e!s}"
-                )
-                self._logger.debug("traceback:", exc_info=True)
-            else:
-                meta.add_connected_realm(crid, connected_realm)
-
-        return meta
-
     def update_region(self, namespace: Namespace, compress_all=False) -> None:
         sys_info = SysInfo()
         sys_info.begin_monitor()
@@ -263,8 +232,17 @@ class Updater:
             self._logger.debug("meta file does not exist, set `ts_compress` to 0")
             ts_compressed = 0
 
-        # create latest meta
-        meta = self.pull_region_meta(namespace)
+        # try update connected realm info, if failed, use existing info
+        try:
+            meta = Meta.from_api(self.bn_api, namespace)
+        except GetConnectedRealmsIndexError as e:
+            self._logger.warning(
+                f"Failed to request connected realms index for: {namespace!r}, "
+                "will use connected realms info from existing meta file. "
+                f"Error message: {e!s}"
+            )
+            self._logger.debug("traceback:", exc_info=True)
+
         start_ts, end_ts = self.update_region_records(
             namespace,
             meta.get_connected_realm_ids(),
