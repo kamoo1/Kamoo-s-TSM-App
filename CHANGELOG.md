@@ -2,6 +2,15 @@
 
 
 
+## v1.1.2 (2024-01-11)
+
+### Fix
+
+* fix: should catch `RetryError` when retry exceeded
+
+also some smol refactor for `GHAPI` ([`b3a5e69`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/b3a5e69232797422e640e03f3294f909bc602475))
+
+
 ## v1.1.1 (2024-01-10)
 
 ### Fix
