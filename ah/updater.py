@@ -4,6 +4,7 @@ import logging
 import argparse
 from logging import getLogger
 from typing import Tuple
+
 from requests.exceptions import HTTPError, RetryError
 
 from ah.api import BNAPI, GHAPI

@@ -13,8 +13,8 @@ from ah.api import GHAPI, UpdateEnum
 class MockResponse(Mock):
     links = requests.Response.links
 
-    def __init__(self, content, status_code=200, headers=None) -> None:
-        super().__init__()
+    def __init__(self, content=None, status_code=200, headers=None, **kwargs) -> None:
+        super().__init__(**kwargs)
         self.headers = headers or {}
         self.content = content
         self.status_code = status_code
@@ -47,7 +47,7 @@ class MockSession(Mock):
     def get(self, url: str, **kwargs):
         if self.MATCH_TAGS.match(url):
             return MockResponse(
-                [
+                content=[
                     {
                         "name": "v1.1.0",
                     },
@@ -61,13 +61,13 @@ class MockSession(Mock):
             )
         elif self.MATCH_RELEASES_TAGS.match(url):
             return MockResponse(
-                {
+                content={
                     "id": 123,
                 }
             )
         elif self.MATCH_RELEASES_ASSETS.match(url):
             return MockResponse(
-                [
+                content=[
                     {
                         "name": "archive.zip",
                         "browser_download_url": "https://example.com/cdn/archive.zip",
@@ -75,7 +75,7 @@ class MockSession(Mock):
                 ]
             )
         elif self.MATCH_CDN.match(url):
-            return MockResponse(b"content")
+            return MockResponse(content=b"content")
         elif self.MATCH_PAGINATION.match(url):
             # get url param `page` from url
             parse_ = parse.urlparse(url)
@@ -83,7 +83,7 @@ class MockSession(Mock):
             page = int(query["page"][0]) if "page" in query else 1
 
             return MockResponse(
-                [f"page-{page}-item-{i}" for i in range(10)],
+                content=[f"page-{page}-item-{i}" for i in range(10)],
                 headers={
                     "link": f"<{parse_.scheme}://{parse_.netloc}{parse_.path}?"
                     f'page={page + 1}>; rel="next"'

@@ -23,7 +23,7 @@ from typing import (
 
 import numpy as np
 from attrs import define, field, Factory
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, RetryError
 
 from ah.protobuf.item_db_pb2 import (
     ItemDB,
@@ -1451,7 +1451,7 @@ class Meta:
         crids = []
         try:
             resp = bn_api.get_connected_realms_index(namespace)
-        except HTTPError as e:
+        except (RetryError, HTTPError) as e:
             raise GetConnectedRealmsIndexError from e
 
         for cr in resp["connected_realms"]:
