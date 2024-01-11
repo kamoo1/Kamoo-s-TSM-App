@@ -3,6 +3,8 @@ from random import shuffle, randint
 from tempfile import TemporaryDirectory
 import os
 
+from requests.exceptions import RetryError
+
 from ah.updater import Updater
 from ah.models import (
     CommoditiesResponse,
@@ -18,7 +20,6 @@ from ah.models import (
     Meta,
     DBFileName,
 )
-from ah.errors import GetConnectedRealmsIndexError
 from ah.db import DBHelper
 from ah.updater import main as updater_main, parse_args as updater_parse_args
 from ah.tsm_exporter import main as exporter_main, parse_args as exporter_parse_args
@@ -657,7 +658,7 @@ class TestWorkflow(TestCase):
         """test the ability to reuse existing connected realms index
         during `get_connected_realms_index` api failure.
         """
-        m1.side_effect = GetConnectedRealmsIndexError()
+        m1.side_effect = RetryError()
         m2.return_value = (1, 1)  # update_increment
         temp = TemporaryDirectory()
         db_path = f"{temp.name}/db"

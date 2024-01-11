@@ -97,17 +97,14 @@ class GHAPI(BoundCacheMixin):
         url: str,
         session: requests.Session = None,
         method: str = "get",
-        add_proxy: bool = False,
         **kwargs,
     ) -> Generator[requests.Response, None, None]:
         url_ = url
         # `GHAPI.REQUESTS_KWARGS` overwrites duplicated keys
         kwargs_ = {**kwargs, **GHAPI.REQUESTS_KWARGS}
-        r = session or requests.Session()
+        session = session or self.session
         while True:
-            if add_proxy:
-                url_ = self.add_proxy(url_)
-            resp = r.request(method, url_, **kwargs_)
+            resp = self._request(method, url_, session=session, **kwargs_)
             yield resp
             if "next" not in resp.links:
                 break
@@ -135,6 +132,15 @@ class GHAPI(BoundCacheMixin):
             return self.gh_proxy + url
         return url
 
+    def _request(
+        self, method: str, url: str, session: requests.Session | None = None, **kwargs
+    ) -> requests.Response:
+        url = self.add_proxy(url)
+        session = session or self.session
+        resp = session.request(method, url, **kwargs)
+        resp.raise_for_status()
+        return resp
+
     @bound_cache(10 * SECONDS_IN.MIN)
     def get_assets_uri(
         self,
@@ -144,13 +150,7 @@ class GHAPI(BoundCacheMixin):
     ) -> Dict[str, str]:
         self.logger.info(f"Fetching assets list from release {tag!r}")
         url = f"https://api.github.com/repos/{user}/{repo}/releases/tags/{tag}"
-        url = self.add_proxy(url)
-        resp = self.session.get(
-            url,
-            **self.REQUESTS_KWARGS,
-        )
-        if resp.status_code != 200:
-            raise ValueError(f"Failed to get latest releases, code: {resp.status_code}")
+        resp = self._request("get", url, **self.REQUESTS_KWARGS)
         d = resp.json()
         release_id = d["id"]
 
@@ -159,14 +159,8 @@ class GHAPI(BoundCacheMixin):
         for resp in self.paginated(
             url,
             session=self.session,
-            add_proxy=True,
             params={"per_page": self.PAGINATION_PER_PAGE},
         ):
-            if resp.status_code != 200:
-                raise ValueError(
-                    f"Failed to get latest release assets, code: {resp.status_code}"
-                )
-
             assets = resp.json()
             for asset in assets:
                 ret[asset["name"]] = asset["browser_download_url"]
@@ -177,10 +171,7 @@ class GHAPI(BoundCacheMixin):
     def get_asset(self, url: str) -> bytes:
         name = urlparse(url).path.split("/")[-1]
         self.logger.info(f"Downloading asset {name!r}")
-        url = self.add_proxy(url)
-        resp = self.session.get(url, **self.REQUESTS_KWARGS)
-        if resp.status_code != 200:
-            raise ValueError(f"Failed to get releases, code: {resp.status_code}")
+        resp = self._request("get", url, **self.REQUESTS_KWARGS)
         return resp.content
 
     @bound_cache(10 * SECONDS_IN.MIN)
@@ -191,12 +182,8 @@ class GHAPI(BoundCacheMixin):
         for resp in self.paginated(
             url,
             session=self.session,
-            add_proxy=True,
             params={"per_page": self.PAGINATION_PER_PAGE},
         ):
-            if resp.status_code != 200:
-                raise ValueError(f"Failed to get tags, code: {resp.status_code}")
-
             tags = resp.json()
             for tag in tags:
                 ret.append(tag["name"])
