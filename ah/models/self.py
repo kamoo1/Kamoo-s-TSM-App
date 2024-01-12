@@ -1452,7 +1452,7 @@ class Meta:
         try:
             resp = bn_api.get_connected_realms_index(namespace)
         except (RetryError, HTTPError) as e:
-            raise GetConnectedRealmsIndexError from e
+            raise GetConnectedRealmsIndexError(e) from e
 
         for cr in resp["connected_realms"]:
             match = re.search(r"connected-realm/(\d+)", cr["href"])
