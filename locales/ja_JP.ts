@@ -4,287 +4,287 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../ah/ui/main_view.py" line="232"/>
+        <location filename="../ah/ui/main_view.py" line="237"/>
         <source>Export</source>
         <translation>エクスポート</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="233"/>
+        <location filename="../ah/ui/main_view.py" line="238"/>
         <source>Exporter</source>
         <translation>エクスポート</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="234"/>
+        <location filename="../ah/ui/main_view.py" line="239"/>
         <source>BN Client ID</source>
         <translation>BNクライアントID</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="235"/>
+        <location filename="../ah/ui/main_view.py" line="240"/>
         <source>BN Client Secret</source>
         <translation>BNクライアントシークレット</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="236"/>
+        <location filename="../ah/ui/main_view.py" line="241"/>
         <source>Fork from Github when local DB not exist.</source>
         <translation>ローカルDBが存在しない場合、GitHubからダウンロードする</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="237"/>
+        <location filename="../ah/ui/main_view.py" line="234"/>
         <source>Remote Mode</source>
         <translation>リモートモード</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="238"/>
+        <location filename="../ah/ui/main_view.py" line="243"/>
         <source>Update</source>
         <translation>アップデート</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="239"/>
+        <location filename="../ah/ui/main_view.py" line="244"/>
         <source>Updater</source>
         <translation>アップデート</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="240"/>
+        <location filename="../ah/ui/main_view.py" line="245"/>
         <source>Browse DB</source>
         <translation>DBを閲覧</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="241"/>
+        <location filename="../ah/ui/main_view.py" line="246"/>
         <source>Clear DB </source>
         <translation>DBをクリア</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="242"/>
+        <location filename="../ah/ui/main_view.py" line="247"/>
         <source>Browse Cache</source>
         <translation>キャッシュを閲覧</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="243"/>
+        <location filename="../ah/ui/main_view.py" line="248"/>
         <source>Clear Cache</source>
         <translation>キャッシュをクリア</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="244"/>
+        <location filename="../ah/ui/main_view.py" line="249"/>
         <source>Patch LibRealmInfo</source>
         <translation>LibRealmInfoをパッチ</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="245"/>
+        <location filename="../ah/ui/main_view.py" line="250"/>
         <source>Tools</source>
         <translation>ツール</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="256"/>
+        <location filename="../ah/ui/main_view.py" line="261"/>
         <source>Base path of WoW, e.g. &apos;C:\Program Files (x86)\World of Warcraft&apos;</source>
         <translation>WoWのルートパス、例: &apos;C:\Program Files (x86)\World of Warcraft&apos;</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="246"/>
+        <location filename="../ah/ui/main_view.py" line="251"/>
         <source>Proxy of Github, for those who unable to access behind a firewall.</source>
         <translation>ファイアウォールの背後にアクセスできない人のためのGithubプロキシ</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="254"/>
+        <location filename="../ah/ui/main_view.py" line="259"/>
         <source>Local DB path, defaults to &apos;db&apos; (under current folder)</source>
         <translation>ローカルDBパス、デフォルトは現在のフォルダー内の &apos;db&apos;</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="250"/>
+        <location filename="../ah/ui/main_view.py" line="255"/>
         <source>...</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="257"/>
+        <location filename="../ah/ui/main_view.py" line="262"/>
         <source>Enable</source>
         <translation>有効にする</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="252"/>
+        <location filename="../ah/ui/main_view.py" line="257"/>
         <source>World of Warcraft Install Path</source>
         <translation>World of Warcraft インストールパス</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="247"/>
+        <location filename="../ah/ui/main_view.py" line="252"/>
         <source>Github Proxy</source>
         <translation>GitHubプロキシ</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="248"/>
+        <location filename="../ah/ui/main_view.py" line="253"/>
         <source>Remote Source</source>
         <translation>リモートソース</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="253"/>
+        <location filename="../ah/ui/main_view.py" line="258"/>
         <source>Used as source in remote mode, also for software update. Only accepting Github.</source>
         <translation>リモートモードでのデータソースとして使用し、ソフトウェアのアップデートのソースとしても使用します。GitHubのみ対応。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="251"/>
+        <location filename="../ah/ui/main_view.py" line="256"/>
         <source>Local DB Path</source>
         <translation>ローカルDBパス</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="258"/>
+        <location filename="../ah/ui/main_view.py" line="263"/>
         <source>Settings</source>
         <translation>設定</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="259"/>
+        <location filename="../ah/ui/main_view.py" line="264"/>
         <source>Logging Level</source>
         <translation>ログレベル</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="260"/>
+        <location filename="../ah/ui/main_view.py" line="265"/>
         <source>Log</source>
         <translation>ログ</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="284"/>
+        <location filename="../ah/ui/main_controller.py" line="285"/>
         <source>Invalid Warcraft Base Path</source>
         <translation>無効なWarcraftルートパス</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="300"/>
+        <location filename="../ah/ui/main_controller.py" line="301"/>
         <source>Invalid Github Repo</source>
         <translation>無効なGitHubリポジトリ</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="316"/>
+        <location filename="../ah/ui/main_controller.py" line="317"/>
         <source>Invalid Github Proxy</source>
         <translation>無効なGitHubプロキシ</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="336"/>
+        <location filename="../ah/ui/main_controller.py" line="337"/>
         <source>Invalid Input</source>
         <translation>無効な入力</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="695"/>
+        <location filename="../ah/ui/main_controller.py" line="700"/>
         <source>Remove Path</source>
         <translation>パスを削除</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="717"/>
+        <location filename="../ah/ui/main_controller.py" line="722"/>
         <source>Browse Path</source>
         <translation>パスを参照</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="780"/>
+        <location filename="../ah/ui/main_controller.py" line="785"/>
         <source>Select DB Path</source>
         <translation>DBパスを選択</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="793"/>
+        <location filename="../ah/ui/main_controller.py" line="798"/>
         <source>Select Warcraft Base Path</source>
         <translation>Warcraftルートパスを選択</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1282"/>
+        <location filename="../ah/ui/main_controller.py" line="1322"/>
         <source>Config Error</source>
         <translation>設定エラー</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1187"/>
+        <location filename="../ah/ui/main_controller.py" line="1219"/>
         <source>Export Error</source>
         <translation>エクスポートエラー</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1238"/>
+        <location filename="../ah/ui/main_controller.py" line="1270"/>
         <source>Update Error</source>
         <translation>アップデートエラー</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1271"/>
+        <location filename="../ah/ui/main_controller.py" line="1311"/>
         <source>Patch TSM</source>
         <translation>TSMのパッチ適用</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1271"/>
+        <location filename="../ah/ui/main_controller.py" line="1311"/>
         <source>Patched TSM successfully!</source>
         <translation>TSMは正常にパッチされました！</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="255"/>
+        <location filename="../ah/ui/main_view.py" line="260"/>
         <source>Language</source>
         <translation>言語 (language)</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="625"/>
+        <location filename="../ah/ui/main_controller.py" line="630"/>
         <source>Unknown widget type for load settings: {!r}</source>
         <translation>{!r} ウィジェットの設定を読み込むことができません。そのウィジェットの種類のためです。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="635"/>
+        <location filename="../ah/ui/main_controller.py" line="640"/>
         <source>Failed to load settings for {!r}</source>
         <translation>{!r} の設定を読み込むのに失敗しました。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="653"/>
+        <location filename="../ah/ui/main_controller.py" line="658"/>
         <source>Unknown widget type for save settings: {!r}</source>
         <translation>{!r} ウィジェットの設定を保存できません。ウィジェットのタイプが不明です。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="715"/>
+        <location filename="../ah/ui/main_controller.py" line="720"/>
         <source>{!r} does not exist.</source>
         <translation>{!r} は存在しません。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="741"/>
+        <location filename="../ah/ui/main_controller.py" line="746"/>
         <source>Locale {!r} not found!</source>
         <translation>言語 {!r} が見つかりません！</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="693"/>
+        <location filename="../ah/ui/main_controller.py" line="698"/>
         <source>Are you sure you want to remove {!r}?</source>
         <translation>{!r}を削除してもよろしいですか？</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="753"/>
+        <location filename="../ah/ui/main_controller.py" line="758"/>
         <source>Battle.net client ID, will be saved under {!r}.</source>
         <translation>Battle.netクライアントID、{!r} に保存されます。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="756"/>
+        <location filename="../ah/ui/main_controller.py" line="761"/>
         <source>Battle.net client secret, will be saved under {!r}.</source>
         <translation>Battle.netクライアントの秘密情報、{!r} に保存されます。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="934"/>
+        <location filename="../ah/ui/main_controller.py" line="943"/>
         <source>Update Available</source>
         <translation>アップデートが利用可能です</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="951"/>
+        <location filename="../ah/ui/main_controller.py" line="960"/>
         <source>Update Required</source>
         <translation>アップデートが必要です</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="928"/>
+        <location filename="../ah/ui/main_controller.py" line="937"/>
         <source>Update to version {!s} available, do you want to download now?</source>
         <translation>バージョン {!s} へのアップデートが利用可能です。今すぐダウンロードしますか？</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="944"/>
+        <location filename="../ah/ui/main_controller.py" line="953"/>
         <source>Update to version {!s} required, current version is no longer being supported. Do you want to download now?</source>
         <translation>バージョン {!s} へのアップデートが必要です。現在のバージョンはサポートされなくなりました。今すぐダウンロードしますか？</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="977"/>
+        <location filename="../ah/ui/main_controller.py" line="986"/>
         <source>Check Update Error</source>
         <translation>アップデートの確認エラー</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1099"/>
+        <location filename="../ah/ui/main_controller.py" line="1134"/>
         <source>Load Meta Error</source>
         <translation>Meta の読み込みエラー</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="230"/>
+        <location filename="../ah/ui/main_view.py" line="233"/>
         <source>Export from DB on Github</source>
         <translation>GitHub 上のデータベースからエクスポート</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1130"/>
+        <location filename="../ah/ui/main_controller.py" line="1162"/>
         <source>If you&apos;re exporting regions and realms not officially supported by TSM (like TW, KR, and some classic realms), it is recommended to patch TSM&apos;s &apos;LibRealmInfo&apos; library with the data of some newly added realms they&apos;re missing. 
 
 Missing these data can cause TSM misidentify the region of these realms, which can lead to problem loading auction data.
@@ -301,44 +301,59 @@ You might need to patch again after every TSM update.</source>
 TSMの更新後に再度パッチを適用する必要があるかもしれません。</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1287"/>
+        <location filename="../ah/ui/main_controller.py" line="1331"/>
         <source>Update: N/A</source>
         <translation>アップデート：N/A</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1305"/>
+        <location filename="../ah/ui/main_controller.py" line="1349"/>
         <source>Update: more than a day ago</source>
         <translation>アップデート：1日以上前</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1307"/>
+        <location filename="../ah/ui/main_controller.py" line="1351"/>
         <source>Update: {} hours ago</source>
         <translation>アップデート：{}時間前</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1311"/>
+        <location filename="../ah/ui/main_controller.py" line="1355"/>
         <source>Update: {} minutes ago</source>
         <translation>アップデート：{} 分前</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="1315"/>
+        <location filename="../ah/ui/main_controller.py" line="1359"/>
         <source>Update: less than a minute ago</source>
         <translation>アップデート：1分前より短い時間前</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="345"/>
+        <location filename="../ah/ui/main_controller.py" line="346"/>
         <source>Invalid Battle.net Client ID</source>
         <translation>無効な Battle.net クライアント ID</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_controller.py" line="354"/>
+        <location filename="../ah/ui/main_controller.py" line="355"/>
         <source>Invalid Battle.net Client Secret</source>
         <translation>無効な Battle.net クライアントシークレット</translation>
     </message>
     <message>
-        <location filename="../ah/ui/main_view.py" line="229"/>
+        <location filename="../ah/ui/main_view.py" line="232"/>
         <source>Kamoo&apos;s TSM App</source>
         <translation></translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_view.py" line="235"/>
+        <source>Automatically export when DB files related to selection were updated</source>
+        <translation>選択に関連するDBファイルが更新された場合、自動的にエクスポート</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_view.py" line="236"/>
+        <source>Auto</source>
+        <translation>オート</translation>
+    </message>
+    <message>
+        <location filename="../ah/ui/main_view.py" line="242"/>
+        <source>Fork Remote</source>
+        <translation>リモート複製</translation>
     </message>
 </context>
 </TS>

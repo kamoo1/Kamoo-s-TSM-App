@@ -105,6 +105,16 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QCheckBox" name="checkBox_exporter_auto">
+            <property name="toolTip">
+             <string>Automatically export when DB files related to selection were updated</string>
+            </property>
+            <property name="text">
+             <string>Auto</string>
+            </property>
+           </widget>
+          </item>
           <item alignment="Qt::AlignRight">
            <widget class="QLabel" name="label_exporter_time">
             <property name="text">
@@ -190,7 +200,7 @@
            <string>Fork from Github when local DB not exist.</string>
           </property>
           <property name="text">
-           <string>Remote Mode</string>
+           <string>Fork Remote</string>
           </property>
           <property name="checked">
            <bool>true</bool>
