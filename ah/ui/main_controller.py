@@ -133,6 +133,7 @@ DEFAULT_SETTINGS = (
         "comboBox_exporter_game_version",
     ),
     ("exporter/remote", True, "checkBox_exporter_remote"),
+    ("exporter/auto", False, "checkBox_exporter_auto"),
     ("updater/remote", True, "checkBox_updater_remote"),
     ("updater/client_id", "", "lineEdit_updater_id"),
     ("updater/client_secret", "", "lineEdit_updater_secret"),
@@ -524,16 +525,19 @@ class UpdaterModel(QStandardItemModel):
 
 class Window(QMainWindow, Ui_MainWindow):
     _log_signal = pyqtSignal(str)
+    _sig_auto_export = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._path_settings = "settings.ini"
         self._settings = QSettings(self._path_settings, QSettings.IniFormat)
         self._translator = QTranslator(self)
+        # TODO: what is the point of this class & signal?
         self._log_handler = LogEmitterHandler(self._log_signal)
         self._log_handler.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
         logging.getLogger().addHandler(self._log_handler)
         self._logger = logging.getLogger("MainWindow")
+        self._sig_auto_export.connect(self.on_auto_export)
 
         self.setupUi(self)
         # widgets that need to be disabled when updating
@@ -554,6 +558,7 @@ class Window(QMainWindow, Ui_MainWindow):
             self.listView_exporter_realms,
             self.checkBox_exporter_remote,
             self.pushButton_exporter_export,
+            self.checkBox_exporter_auto,
             # update tab's
             self.pushButton_updater_update,
         ]
@@ -589,7 +594,7 @@ class Window(QMainWindow, Ui_MainWindow):
         # because when it triggers twice, due to the async nature of worker thread,
         # the result from the first trigger may override the second.
         self.post_setting_load_setup()
-        self.on_exporter_dropdown_change()
+        self.on_exporter_dropdown_change(emit_auto_exp_remote=True)
         self.on_check_update()
 
     def closeEvent(self, event) -> None:
@@ -838,7 +843,11 @@ class Window(QMainWindow, Ui_MainWindow):
         # to update last update time
         self._exporter_update_time_timer = QTimer(self)
         self._exporter_update_time_timer.timeout.connect(
-            partial(self.on_exporter_dropdown_change, update_time_only=True)
+            partial(
+                self.on_exporter_dropdown_change,
+                update_time_only=True,
+                emit_auto_exp_remote=True,
+            )
         )
         self._exporter_update_time_timer.start(7 * SECONDS_IN.MIN * 1000)
 
@@ -1038,7 +1047,13 @@ class Window(QMainWindow, Ui_MainWindow):
             )
         model.set_selected(index.row(), item.checkState() == Qt.Checked)
 
-    def on_exporter_dropdown_change(self, *, update_time_only=False) -> None:
+    def on_exporter_dropdown_change(
+        self,
+        *,
+        update_time_only=False,
+        emit_auto_exp_remote=False,
+        emit_auto_exp_local=False,
+    ) -> None:
         if not update_time_only:
             # lock widgets
             for widget in self._lock_on_export_dropdown:
@@ -1056,8 +1071,9 @@ class Window(QMainWindow, Ui_MainWindow):
 
         try:
             namespace = self.get_namespace()
+            is_remote = self.checkBox_exporter_remote.isChecked()
 
-            if self.checkBox_exporter_remote.isChecked():
+            if is_remote:
                 repo = self.get_repo()
                 gh_api = self.get_gh_api()
                 forker = GithubFileForker(repo, gh_api)
@@ -1068,6 +1084,13 @@ class Window(QMainWindow, Ui_MainWindow):
                 data_path = self.get_db_path()
                 forker = None
                 db_helper = DBHelper(data_path)
+
+            meta_file = db_helper.get_file(namespace, DBTypeEnum.META)
+            last_meta = Meta.from_file(meta_file)
+            last_ts_end = last_meta.get_update_ts()[1] or 0
+
+            if forker:
+                meta_file.remove()
 
         except ConfigError as e:
             self.popup_error(_t("MainWindow", "Config Error"), str(e))
@@ -1089,6 +1112,18 @@ class Window(QMainWindow, Ui_MainWindow):
                         tups_realm_crid_cate.append((realm, crid, category))
                 self.populate_exporter_realms(tups_realm_crid_cate, namespace=namespace)
 
+            print(
+                f"{is_remote=}, {emit_auto_exp_remote=}, {emit_auto_exp_local=}, {ts_end=}, {last_ts_end=}"
+            )
+            if (
+                not is_remote
+                and emit_auto_exp_local
+                or is_remote
+                and emit_auto_exp_remote
+                and ts_end > last_ts_end
+            ):
+                self._sig_auto_export.emit()
+
         def on_final(success: bool, msg: str) -> None:
             if not update_time_only:
                 # unlock widgets
@@ -1105,9 +1140,6 @@ class Window(QMainWindow, Ui_MainWindow):
             on_data=on_data,
         )
         def task():
-            meta_file = db_helper.get_file(namespace, DBTypeEnum.META)
-            if forker:
-                meta_file.remove()
             meta = Meta.from_file(meta_file, forker=forker)
             return meta._data
 
@@ -1166,7 +1198,7 @@ class Window(QMainWindow, Ui_MainWindow):
             realms = self.listView_exporter_realms.model().get_selected_realms()
             region = RegionEnum[self.comboBox_exporter_region.currentText()]
             repo = self.get_repo()
-            remote_mode = self.checkBox_exporter_remote.isChecked()
+            is_remote = self.checkBox_exporter_remote.isChecked()
             gh_proxy = self.get_gh_proxy()
             cache = self.get_cache()
 
@@ -1192,7 +1224,7 @@ class Window(QMainWindow, Ui_MainWindow):
         def task(*args, **kwargs):
             exporter_main(
                 db_path=db_path,
-                repo=repo if remote_mode else None,
+                repo=repo if is_remote else None,
                 gh_proxy=gh_proxy,
                 game_version=game_version,
                 warcraft_base=warcraft_base,
@@ -1236,6 +1268,14 @@ class Window(QMainWindow, Ui_MainWindow):
 
             if not success:
                 self.popup_error(_t("MainWindow", "Update Error"), msg)
+            else:
+                export_ns = self.get_namespace()
+                selected = (export_ns.region, export_ns.game_version)
+                if selected in combos:
+                    self.on_exporter_dropdown_change(
+                        update_time_only=True,
+                        emit_auto_exp_local=True,
+                    )
 
             self.notify_user()
 
@@ -1282,6 +1322,10 @@ class Window(QMainWindow, Ui_MainWindow):
             self.popup_error(_t("MainWindow", "Config Error"), str(e))
             return
 
+    def on_auto_export(self) -> None:
+        if self.checkBox_exporter_auto.isChecked():
+            self.on_exporter_export()
+
     def pupulate_exporter_time(self, ts_end: int | None) -> None:
         if ts_end is None:
             text = _t("MainWindow", "Update: N/A")
@@ -1293,7 +1337,7 @@ class Window(QMainWindow, Ui_MainWindow):
             ("hour", SECONDS_IN.HOUR),
             ("minute", SECONDS_IN.MIN),
         ]
-        delta = int(time.time()) - ts_end
+        delta = max(int(time.time()) - ts_end, 0)
 
         for unit, seconds in units:
             n = delta // seconds
