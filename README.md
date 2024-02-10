@@ -3,6 +3,8 @@
 [![codecov](https://codecov.io/gh/kamoo1/Kamoo-s-TSM-App/branch/main/graph/badge.svg?token=20JNWT1J7X)](https://codecov.io/gh/kamoo1/Kamoo-s-TSM-App)
 [![AH Update](https://github.com/kamoo1/Kamoo-s-TSM-App/actions/workflows/cron.yml/badge.svg)](https://github.com/kamoo1/Kamoo-s-TSM-App/actions/workflows/cron.yml)
 
+[![Battle.net - 中文](https://img.shields.io/badge/Battle.net-中文-blue?logo=battledotnet)](https://blizzard.com/invite/KWgRD0seoB)
+
 Auction data updater and exporter for the Trade Skill Master (TSM) addon in World of Warcraft.
 
 ## Features
@@ -52,7 +54,7 @@ python -m ah.ui
 ```
 ## FAQ
 ### Update schedule?
-Updates are scheduled to run every 3 hours in this repository.
+Updates are scheduled to run every 2 hours in this repository.
 
 ### What is the *LibRealmInfo* patch?
 It addresses unlisted realms in TSM's source files - mostly newer realms in the KR and TW regions, where prices won't load correctly unless patched. You may want to re-apply this patch every time TSM is updated.
