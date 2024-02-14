@@ -2,6 +2,15 @@
 
 
 
+## v1.2.1 (2024-02-14)
+
+### Fix
+
+* fix: battle.net ip ban
+
+fix ip ban by adding optional bn oauth mirror site ([`75d1523`](https://github.com/kamoo1/Kamoo-s-TSM-App/commit/75d152389ebe773d513308a1876e6ddfcd860dd0))
+
+
 ## v1.2.0 (2024-02-10)
 
 ### Documentation
