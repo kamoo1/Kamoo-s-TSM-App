@@ -30,13 +30,15 @@ class Api:
 
         # self._oauth_url = "https://{0}.battle.net{1}"
         # self._oauth_url_cn = "https://www.battlenet.com.cn{0}"
-        self._oauth_url = "https://oauth.battle.net{0}"
-        self._oauth_url_cn = "https://oauth.battlenet.com.cn{0}"
+        self._oauth_url = (
+            config.BN_OAUTH_URL or "https://oauth.battle.net"
+        ) + "{0}"
+        self._oauth_url_cn = (
+            config.BN_OAUTH_URL_CN or "https://oauth.battlenet.com.cn"
+        ) + "{0}"
 
         self._session = requests.Session()
-        retries = Retry(
-            total=5, backoff_factor=1, status_forcelist=[429, 502]
-        )
+        retries = Retry(total=5, backoff_factor=1, status_forcelist=[429, 502])
         self._session.mount("https://", HTTPAdapter(max_retries=retries))
         self._session.mount("http://", HTTPAdapter(max_retries=retries))
 
@@ -55,6 +57,7 @@ class Api:
             url,
             params=query_params,
             auth=(self._client_id, self._client_secret),
+            verify=config.VERIFY_SSL,
         )
         return self._response_handler(response)
 

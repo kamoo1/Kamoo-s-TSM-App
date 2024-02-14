@@ -1112,9 +1112,6 @@ class Window(QMainWindow, Ui_MainWindow):
                         tups_realm_crid_cate.append((realm, crid, category))
                 self.populate_exporter_realms(tups_realm_crid_cate, namespace=namespace)
 
-            print(
-                f"{is_remote=}, {emit_auto_exp_remote=}, {emit_auto_exp_local=}, {ts_end=}, {last_ts_end=}"
-            )
             if (
                 not is_remote
                 and emit_auto_exp_local

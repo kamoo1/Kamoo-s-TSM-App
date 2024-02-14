@@ -26,3 +26,6 @@ TAG_DB_RELEASE = "latest"
 # what is the archive name in the build release,
 # should be the same in `dist_glob_patterns` in `pyproject.toml`
 RELEASED_ARCHIVE_NAME = "archive.zip"
+
+BN_OAUTH_URL = os.environ.get("BN_OAUTH_URL")
+BN_OAUTH_URL_CN = os.environ.get("BN_OAUTH_URL_CN")
