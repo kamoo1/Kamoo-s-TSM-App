@@ -59,6 +59,8 @@ jobs:
       env:
         BN_CLIENT_ID: ${{ secrets.BN_CLIENT_ID }}
         BN_CLIENT_SECRET: ${{ secrets.BN_CLIENT_SECRET }}
+        BN_OAUTH_URL: ${{ env.BN_OAUTH_URL }}
+        BN_OAUTH_URL_CN: ${{ env.BN_OAUTH_URL_CN }}
       run: >
         printf %s\\n 
         retail tw classic tw classic_wlk tw 
