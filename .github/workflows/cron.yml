@@ -28,11 +28,11 @@ jobs:
     needs: test
     steps:
     # checkout 'latest' tag
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: latest
     - name: Set up Python 3.10
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: "3.10"
         cache: "pip"
@@ -45,7 +45,7 @@ jobs:
         echo "JOB_START_TS=$(date +%s)" >> $GITHUB_ENV
         echo "DB_PATH=/tmp/ah_db" >> $GITHUB_ENV
     - name: Get AH Database File from GitHub Cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ${{ env.DB_PATH }}
         # save cache, caches are evicted after 7 days 
@@ -74,7 +74,7 @@ jobs:
         --db_path ${{ env.DB_PATH }} 
         --game_version 
     - name: Release DB - TW
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@4634c16e79c963813287e889244c50009e7f0981
       with:
         tag_name: latest
         files: |
@@ -85,7 +85,7 @@ jobs:
     - name: Reset Rate Limit (sleep 1 minute)
       run: sleep 60
     - name: Release DB - KR
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@4634c16e79c963813287e889244c50009e7f0981
       with:
         tag_name: latest
         files: |
@@ -96,7 +96,7 @@ jobs:
     - name: Reset Rate Limit (sleep 1 minute)
       run: sleep 60
     - name: Release DB - US
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@4634c16e79c963813287e889244c50009e7f0981
       with:
         tag_name: latest
         files: |
@@ -107,7 +107,7 @@ jobs:
     - name: Reset Rate Limit (sleep 1 minute)
       run: sleep 60
     - name: Release DB - EU
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@4634c16e79c963813287e889244c50009e7f0981
       with:
         tag_name: latest
         files: |
